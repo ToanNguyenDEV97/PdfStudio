@@ -4,7 +4,13 @@ public enum ViewerToolMode
 {
     SelectText,
     Hand,
-    EditText
+    SelectObject,
+    EditText,
+    Highlight,
+    Underline,
+    StickyNote,
+    FreeText,
+    Ink
 }
 
 public sealed record PdfRect(double X, double Y, double Width, double Height);

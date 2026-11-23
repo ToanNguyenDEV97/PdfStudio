@@ -107,7 +107,7 @@ public sealed class MuPdfReaderEngine : IPdfReaderEngine
             {
                 if (string.IsNullOrEmpty(letter.Value)) continue;
 
-                var glyph = letter.GlyphRectangle;
+                var glyph = letter.BoundingBox;
                 double fontSize = letter.PointSize > 0 ? letter.PointSize : Math.Max(1, letter.FontSize);
                 string fontName = letter.FontName ?? string.Empty;
 

@@ -31,6 +31,8 @@ public partial class PdfPageViewModel : ObservableObject
     // Lớp 2: Khung bôi đen văn bản và kết quả tìm kiếm (tọa độ 72 DPI)
     public ObservableCollection<HighlightBoxItem> SelectionRects { get; } = [];
     public ObservableCollection<HighlightBoxItem> SearchRects { get; } = [];
+    // Lớp 3: Danh sách Ghi chú (Annotation) chưa lưu của trang
+    public ObservableCollection<AnnotationItemViewModel> Annotations { get; } = [];
 
     public double RenderedScale { get; set; }
 

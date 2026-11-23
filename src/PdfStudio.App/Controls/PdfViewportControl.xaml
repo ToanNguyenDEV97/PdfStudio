@@ -118,6 +118,116 @@
                                                 </DataTemplate>
                                             </ItemsControl.ItemTemplate>
                                         </ItemsControl>
+                                        <!-- LỚP 3: CÁC GHI CHÚ (ANNOTATION) TƯƠNG TÁC TRỰC TIẾP -->
+                                        <ItemsControl ItemsSource="{Binding Annotations}">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Cursor="SizeAll"
+                                                            MouseLeftButtonDown="Annotation_MouseLeftButtonDown"
+                                                            MouseMove="Annotation_MouseMove"
+                                                            MouseLeftButtonUp="Annotation_MouseLeftButtonUp">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="BorderBrush" Value="Transparent" />
+                                                                <Setter Property="BorderThickness" Value="0" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                        <Setter Property="BorderBrush" Value="#B91C1C" />
+                                                                        <Setter Property="BorderThickness" Value="1" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+
+                                                        <Grid Width="{Binding Width}" Height="{Binding Height}">
+                                                            <!-- 1. Highlight -->
+                                                            <ItemsControl ItemsSource="{Binding LocalQuadRects}"
+                                                                          Visibility="{Binding IsHighlight, Converter={StaticResource BoolToVis}}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemContainerStyle>
+                                                                    <Style TargetType="ContentPresenter">
+                                                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                                                    </Style>
+                                                                </ItemsControl.ItemContainerStyle>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border Width="{Binding Width}" Height="{Binding Height}"
+                                                                                Background="{Binding DataContext.HighlightFillBrush, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                CornerRadius="1" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+
+                                                            <!-- 2. Gạch dưới (Underline) -->
+                                                            <ItemsControl ItemsSource="{Binding LocalQuadRects}"
+                                                                          Visibility="{Binding IsUnderline, Converter={StaticResource BoolToVis}}">
+                                                                <ItemsControl.ItemsPanel>
+                                                                    <ItemsPanelTemplate><Canvas /></ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemContainerStyle>
+                                                                    <Style TargetType="ContentPresenter">
+                                                                        <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                                        <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                                                    </Style>
+                                                                </ItemsControl.ItemContainerStyle>
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate>
+                                                                        <Border Width="{Binding Width}" Height="{Binding Height}"
+                                                                                BorderBrush="{Binding DataContext.AccentBrush, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                                BorderThickness="0,0,0,1.6" Background="Transparent" />
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+
+                                                            <!-- 3. Sticky Note -->
+                                                            <Border Width="22" Height="22" CornerRadius="5"
+                                                                    Background="{Binding AccentBrush}"
+                                                                    ToolTip="{Binding TextContent}"
+                                                                    Visibility="{Binding IsStickyNote, Converter={StaticResource BoolToVis}}">
+                                                                <iconPacks:PackIconMaterial Kind="CommentText" Width="13" Height="13"
+                                                                                            Foreground="White"
+                                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                            </Border>
+
+                                                            <!-- 4. Thêm chữ (FreeText) -->
+                                                            <TextBlock Text="{Binding TextContent}"
+                                                                       FontFamily="{Binding FontName}"
+                                                                       FontSize="{Binding FontSize}"
+                                                                       Foreground="{Binding AccentBrush}"
+                                                                       TextWrapping="Wrap" Padding="2"
+                                                                       Visibility="{Binding IsFreeText, Converter={StaticResource BoolToVis}}" />
+
+                                                            <!-- 5. Vẽ tự do (Ink) -->
+                                                            <Polyline Points="{Binding LocalInkPoints}"
+                                                                      Stroke="{Binding AccentBrush}"
+                                                                      StrokeThickness="{Binding StrokeThickness}"
+                                                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                                      Visibility="{Binding IsInk, Converter={StaticResource BoolToVis}}" />
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Nét vẽ tay tạm thời lúc đang giữ chuột -->
+                                        <Polyline x:Name="LiveInkPolyline"
+                                                  Stroke="#B91C1C" StrokeThickness="2"
+                                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                                                  IsHitTestVisible="False" />
                                     </Canvas>
                                 </Viewbox>
                             </Grid>

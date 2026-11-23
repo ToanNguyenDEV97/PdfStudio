@@ -5,11 +5,270 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
 using PdfStudio.Core.Models;
+using PdfStudio.App.Views;
+using PdfStudio.Core.Interfaces;
+using PdfStudio.Engines.IText;
 
 namespace PdfStudio.App.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
+    private readonly IPdfWriterEngine _writerEngine = new ITextWriterEngine();
+
+    [RelayCommand]
+    private void SaveCopy()
+    {
+        if (ActiveTab is null || string.IsNullOrEmpty(ActiveTab.FilePath)) return;
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Lưu thành bản sao",
+            Filter = "PDF Files (*.pdf)|*.pdf",
+            FileName = $"{Path.GetFileNameWithoutExtension(ActiveTab.FileName)}_copy.pdf"
+        };
+
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            File.Copy(ActiveTab.FilePath, dialog.FileName, overwrite: true);
+            MessageBox.Show("Đã lưu bản sao thành công.", "PdfStudio", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Lỗi lưu tệp: {ex.Message}", "PdfStudio", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task MergeFilesAsync()
+    {
+        var openDialog = new OpenFileDialog
+        {
+            Title = "Chọn các tệp PDF muốn gộp (giữ Ctrl để chọn nhiều file)",
+            Filter = "PDF Files (*.pdf)|*.pdf",
+            Multiselect = true
+        };
+
+        if (openDialog.ShowDialog() != true) return;
+        if (openDialog.FileNames.Length < 2)
+        {
+            MessageBox.Show("Vui lòng chọn ít nhất 2 tệp PDF để gộp.", "Gộp PDF", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var saveDialog = new SaveFileDialog
+        {
+            Title = "Lưu tệp PDF sau khi gộp",
+            Filter = "PDF Files (*.pdf)|*.pdf",
+            FileName = "Tai_lieu_da_gop.pdf"
+        };
+
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            await Task.Run(() => _writerEngine.MergeFiles(openDialog.FileNames, saveDialog.FileName));
+            OpenDocumentFromPath(saveDialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể gộp tệp PDF.\nChi tiết: {ex.Message}", "Lỗi gộp PDF", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task SplitPagesAsync()
+    {
+        if (ActiveTab is null) return;
+
+        var prompt = new PromptDialog(
+            "Tách trang PDF",
+            $"Nhập các trang muốn tách (Tổng: {ActiveTab.TotalPages} trang).\nVí dụ: 1-3, 5, 8",
+            $"{ActiveTab.CurrentPage}")
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        if (prompt.ShowDialog() != true || string.IsNullOrWhiteSpace(prompt.InputValue)) return;
+
+        var pages = ParsePageRanges(prompt.InputValue, ActiveTab.TotalPages);
+        if (pages.Count == 0)
+        {
+            MessageBox.Show("Định dạng dải trang không hợp lệ.", "Tách trang", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var saveDialog = new SaveFileDialog
+        {
+            Title = "Lưu tệp PDF đã tách",
+            Filter = "PDF Files (*.pdf)|*.pdf",
+            FileName = $"{Path.GetFileNameWithoutExtension(ActiveTab.FileName)}_tach.pdf"
+        };
+
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            string sourcePath = ActiveTab.FilePath;
+            await Task.Run(() => _writerEngine.ExtractPages(sourcePath, saveDialog.FileName, pages));
+            OpenDocumentFromPath(saveDialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể tách trang.\nChi tiết: {ex.Message}", "Lỗi tách trang", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task RotateCurrentPageAsync()
+    {
+        if (ActiveTab is null) return;
+        int pageNum = ActiveTab.CurrentPage;
+
+        try
+        {
+            await ActiveTab.ApplyInPlaceEditAsync(
+                (src, dst) => _writerEngine.RotatePage(src, dst, pageNum, 90),
+                pageToFocusAfterReload: pageNum);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể xoay trang {pageNum}.\nChi tiết: {ex.Message}", "Lỗi xoay trang", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task DeleteCurrentPageAsync()
+    {
+        if (ActiveTab is null) return;
+        if (ActiveTab.TotalPages <= 1)
+        {
+            MessageBox.Show("Không thể xóa trang cuối cùng của tài liệu.", "Xóa trang", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        int pageNum = ActiveTab.CurrentPage;
+        var confirm = MessageBox.Show(
+            $"Bạn có chắc chắn muốn xóa vĩnh viễn Trang {pageNum} khỏi tệp \"{ActiveTab.FileName}\" không?",
+            "Xác nhận xóa trang",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (confirm != MessageBoxResult.Yes) return;
+
+        try
+        {
+            await ActiveTab.ApplyInPlaceEditAsync(
+                (src, dst) => _writerEngine.DeletePage(src, dst, pageNum),
+                pageToFocusAfterReload: Math.Max(1, pageNum - 1));
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể xóa trang {pageNum}.\nChi tiết: {ex.Message}", "Lỗi xóa trang", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CompressCurrentFileAsync()
+    {
+        if (ActiveTab is null) return;
+
+        var saveDialog = new SaveFileDialog
+        {
+            Title = "Lưu tệp PDF sau khi nén",
+            Filter = "PDF Files (*.pdf)|*.pdf",
+            FileName = $"{Path.GetFileNameWithoutExtension(ActiveTab.FileName)}_nen.pdf"
+        };
+
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            string sourcePath = ActiveTab.FilePath;
+            long beforeBytes = new FileInfo(sourcePath).Length;
+
+            await Task.Run(() => _writerEngine.CompressFile(sourcePath, saveDialog.FileName));
+
+            long afterBytes = new FileInfo(saveDialog.FileName).Length;
+            double savedPercent = beforeBytes > 0 ? (1.0 - (double)afterBytes / beforeBytes) * 100.0 : 0;
+
+            MessageBox.Show(
+                $"Đã nén xong!\nDung lượng cũ: {beforeBytes / 1024.0:N0} KB\nDung lượng mới: {afterBytes / 1024.0:N0} KB ({savedPercent:0.#}%).",
+                "Nén dung lượng PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            OpenDocumentFromPath(saveDialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Lỗi khi nén tệp.\nChi tiết: {ex.Message}", "Lỗi nén PDF", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task ProtectWithPasswordAsync()
+    {
+        if (ActiveTab is null) return;
+
+        var prompt = new PromptDialog(
+            "Đặt mật khẩu bảo vệ PDF (AES-256)",
+            "Nhập mật khẩu yêu cầu khi mở tệp PDF mới:",
+            isPassword: true)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        if (prompt.ShowDialog() != true || string.IsNullOrEmpty(prompt.InputValue)) return;
+
+        var saveDialog = new SaveFileDialog
+        {
+            Title = "Lưu tệp PDF đã mã hóa",
+            Filter = "PDF Files (*.pdf)|*.pdf",
+            FileName = $"{Path.GetFileNameWithoutExtension(ActiveTab.FileName)}_baomat.pdf"
+        };
+
+        if (saveDialog.ShowDialog() != true) return;
+
+        try
+        {
+            string sourcePath = ActiveTab.FilePath;
+            string password = prompt.InputValue;
+            await Task.Run(() => _writerEngine.ProtectWithPassword(sourcePath, saveDialog.FileName, password, password));
+
+            MessageBox.Show("Đã tạo tệp PDF bảo vệ bằng mật khẩu AES-256 thành công.", "Bảo mật PDF", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể mã hóa tệp.\nChi tiết: {ex.Message}", "Lỗi bảo mật", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private static List<int> ParsePageRanges(string input, int maxPage)
+    {
+        var result = new List<int>();
+        foreach (string rawPart in input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (rawPart.Contains('-'))
+            {
+                string[] bounds = rawPart.Split('-', StringSplitOptions.TrimEntries);
+                if (bounds.Length == 2
+                    && int.TryParse(bounds[0], out int start)
+                    && int.TryParse(bounds[1], out int end))
+                {
+                    int from = Math.Clamp(Math.Min(start, end), 1, maxPage);
+                    int to = Math.Clamp(Math.Max(start, end), 1, maxPage);
+                    for (int p = from; p <= to; p++) result.Add(p);
+                }
+            }
+            else if (int.TryParse(rawPart, out int single) && single >= 1 && single <= maxPage)
+            {
+                result.Add(single);
+            }
+        }
+        return result;
+    }
     public ObservableCollection<DocumentTabViewModel> Tabs { get; } = [];
 
     [ObservableProperty]
@@ -23,8 +282,20 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsHandTool))]
     [NotifyPropertyChangedFor(nameof(IsSelectTextTool))]
+    [NotifyPropertyChangedFor(nameof(IsSelectObjectTool))]
     [NotifyPropertyChangedFor(nameof(IsEditTextMode))]
+    [NotifyPropertyChangedFor(nameof(IsHighlightTool))]
+    [NotifyPropertyChangedFor(nameof(IsUnderlineTool))]
+    [NotifyPropertyChangedFor(nameof(IsStickyNoteTool))]
+    [NotifyPropertyChangedFor(nameof(IsFreeTextTool))]
+    [NotifyPropertyChangedFor(nameof(IsInkTool))]
     private ViewerToolMode _activeTool = ViewerToolMode.SelectText;
+    public bool IsSelectObjectTool => ActiveTool == ViewerToolMode.SelectObject;
+    public bool IsHighlightTool => ActiveTool == ViewerToolMode.Highlight;
+    public bool IsUnderlineTool => ActiveTool == ViewerToolMode.Underline;
+    public bool IsStickyNoteTool => ActiveTool == ViewerToolMode.StickyNote;
+    public bool IsFreeTextTool => ActiveTool == ViewerToolMode.FreeText;
+    public bool IsInkTool => ActiveTool == ViewerToolMode.Ink;
 
     // Thanh Tìm kiếm nổi Ctrl+F
     [ObservableProperty] private bool _isSearchBarVisible;
@@ -181,5 +452,83 @@ public partial class MainViewModel : ObservableObject
         foreach (var tab in Tabs)
             tab.Dispose();
         Tabs.Clear();
+    }
+    [RelayCommand]
+    private void SetSelectObjectTool() => ActiveTool = ViewerToolMode.SelectObject;
+
+    [RelayCommand]
+    private void SetHighlightTool()
+    {
+        ActiveTool = ViewerToolMode.Highlight;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#FACC15";
+    }
+
+    [RelayCommand]
+    private void SetUnderlineTool()
+    {
+        ActiveTool = ViewerToolMode.Underline;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#16A34A";
+    }
+
+    [RelayCommand]
+    private void SetStickyNoteTool()
+    {
+        ActiveTool = ViewerToolMode.StickyNote;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#F59E0B";
+    }
+
+    [RelayCommand]
+    private void SetFreeTextTool()
+    {
+        ActiveTool = ViewerToolMode.FreeText;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#111827";
+    }
+
+    [RelayCommand]
+    private void SetInkTool()
+    {
+        ActiveTool = ViewerToolMode.Ink;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#B91C1C";
+    }
+
+    [RelayCommand]
+    private void SelectColor(string? hex)
+    {
+        if (ActiveTab is null || string.IsNullOrWhiteSpace(hex)) return;
+        ActiveTab.SelectedColorHex = hex;
+        if (ActiveTab.SelectedAnnotation is not null)
+            ActiveTab.ApplyPropertiesToSelectedAnnotation();
+    }
+
+    [RelayCommand]
+    private void ApplyPropertiesToSelection() => ActiveTab?.ApplyPropertiesToSelectedAnnotation();
+
+    [RelayCommand]
+    private void Undo() => ActiveTab?.UndoManager.Undo();
+
+    [RelayCommand]
+    private void Redo() => ActiveTab?.UndoManager.Redo();
+
+    [RelayCommand]
+    private void DeleteSelectedAnnotation() => ActiveTab?.DeleteSelectedAnnotation();
+
+    [RelayCommand]
+    private async Task SaveDocumentAsync()
+    {
+        if (ActiveTab is null) return;
+        if (!ActiveTab.IsDirty)
+        {
+            MessageBox.Show("Không có ghi chú hay thay đổi mới cần lưu.", "Lưu tài liệu", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            await ActiveTab.SavePendingAnnotationsAsync(_writerEngine);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể lưu ghi chú vào tệp PDF.\nChi tiết: {ex.Message}", "Lỗi lưu tệp", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 }

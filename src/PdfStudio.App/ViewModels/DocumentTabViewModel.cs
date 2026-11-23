@@ -11,6 +11,7 @@ using PdfStudio.App.Services;
 using PdfStudio.Core.Interfaces;
 using PdfStudio.Core.Models;
 using PdfStudio.Engines.MuPdf;
+using PdfStudio.Core;
 
 namespace PdfStudio.App.ViewModels;
 
@@ -18,7 +19,7 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
 {
     private const int MaxCachedPages = 12;
 
-    private readonly IPdfReaderEngine _readerEngine;
+    private IPdfReaderEngine _readerEngine;
     private readonly LinkedList<int> _lruOrder = new();
     private readonly HashSet<int> _lruSet = [];
     private readonly HashSet<int> _renderingPages = [];
@@ -34,6 +35,18 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
     private double _currentDpiScale = 1.0;
     private int _activeSearchMatchIndex = -1;
     private bool _disposed;
+    public UndoRedoManager UndoManager { get; } = new();
+
+    public string TabDisplayName => IsDirty ? $"{FileName} *" : FileName;
+
+    [ObservableProperty] private AnnotationItemViewModel? _selectedAnnotation;
+    [ObservableProperty] private string _selectedColorHex = "#FACC15";
+    [ObservableProperty] private double _selectedStrokeThickness = 2.0;
+
+    public bool CanUndo => UndoManager.CanUndo;
+    public bool CanRedo => UndoManager.CanRedo;
+
+    partial void OnIsDirtyChanged(bool value) => OnPropertyChanged(nameof(TabDisplayName));
 
     public event Action<int>? ScrollToPageRequested;
 
@@ -70,6 +83,13 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
 
         if (Pages.Count > 0)
             Pages[0].IsSelected = true;
+
+        UndoManager.StateChanged += () =>
+        {
+            OnPropertyChanged(nameof(CanUndo));
+            OnPropertyChanged(nameof(CanRedo));
+            IsDirty = Pages.Any(p => p.Annotations.Count > 0);
+        };
     }
 
     public void UpdateDpiScale(double dpiScale)
@@ -272,6 +292,64 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
 
         _activeSearchMatchIndex = 0;
         RefreshSearchHighlightsAndScroll();
+    }
+    // =========================================================
+    // LƯU AN TOÀN KHÔNG KHÓA FILE (GIẢI PHÓNG HANDLE -> HOÁN ĐỔI -> RELOAD)
+    // =========================================================
+    public async Task ApplyInPlaceEditAsync(Action<string, string> editAction, int? pageToFocusAfterReload = null)
+    {
+        if (_disposed || string.IsNullOrEmpty(FilePath)) return;
+
+        int targetPage = pageToFocusAfterReload ?? CurrentPage;
+        string directory = Path.GetDirectoryName(FilePath) ?? Path.GetTempPath();
+        string tempFile = Path.Combine(directory, $".{Path.GetFileNameWithoutExtension(FilePath)}_{Guid.NewGuid():N}.tmp");
+
+        // 1. Dừng mọi tác vụ render/tìm kiếm đang chạy và nhả hoàn toàn file gốc khỏi MuPDF + PdfPig
+        _renderCts?.Cancel();
+        _zoomDebounceCts?.Cancel();
+        _searchCts?.Cancel();
+        _renderingPages.Clear();
+        _renderingThumbnails.Clear();
+        _lruOrder.Clear();
+        _lruSet.Clear();
+        _pageCharsCache.Clear();
+        ClearSearchHighlights();
+        ClearSelection();
+
+        _readerEngine.Dispose();
+
+        try
+        {
+            // 2. Chạy iText ghi sang file tạm trên luồng nền rồi hoán đổi an toàn
+            await Task.Run(() =>
+            {
+                editAction(FilePath, tempFile);
+                File.Move(tempFile, FilePath, overwrite: true);
+            });
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+                try { File.Delete(tempFile); } catch { }
+
+            // 3. Mở lại file (dù thành công hay gặp lỗi để tab luôn hiển thị được)
+            _readerEngine = new MuPdfReaderEngine(FilePath);
+            TotalPages = _readerEngine.PageCount;
+
+            Pages.Clear();
+            foreach (var meta in _readerEngine.GetAllPageMetadata())
+                Pages.Add(new PdfPageViewModel(meta, ZoomPercent));
+
+            int clampedPage = Math.Clamp(targetPage, 1, Math.Max(1, Pages.Count));
+            CurrentPage = clampedPage;
+            if (Pages.Count > 0)
+            {
+                Pages[clampedPage - 1].IsSelected = true;
+                ScrollToPageRequested?.Invoke(clampedPage - 1);
+                _ = RequestVisiblePagesAsync(clampedPage - 1, clampedPage - 1, forceRerender: true);
+                _ = RequestVisibleThumbnailsAsync(Math.Max(0, clampedPage - 3), Math.Min(Pages.Count - 1, clampedPage + 3));
+            }
+        }
     }
 
     public void NextSearchMatch()
@@ -495,5 +573,147 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
 
         Pages.Clear();
         _readerEngine.Dispose();
+    }
+    // =========================================================
+    // 5. BỘ GHI CHÚ (ANNOTATION) & UNDO / REDO
+    // =========================================================
+    public void SelectAnnotation(AnnotationItemViewModel? item)
+    {
+        if (SelectedAnnotation is not null)
+            SelectedAnnotation.IsSelected = false;
+
+        SelectedAnnotation = item;
+
+        if (item is not null)
+        {
+            item.IsSelected = true;
+            SelectedColorHex = item.ColorHex;
+            SelectedStrokeThickness = item.StrokeThickness;
+            if (item.IsFreeText)
+            {
+                SelectedFont = item.FontName;
+                SelectedFontSize = $"{item.FontSize:0} pt";
+            }
+        }
+    }
+
+    public void AddAnnotation(PdfAnnotationModel model)
+    {
+        if (_disposed || model.PageIndex < 0 || model.PageIndex >= Pages.Count) return;
+
+        var vm = new AnnotationItemViewModel(model);
+        var page = Pages[model.PageIndex];
+
+        UndoManager.Execute(new DelegateUndoAction(
+            execute: () =>
+            {
+                page.Annotations.Add(vm);
+                SelectAnnotation(vm);
+            },
+            undo: () =>
+            {
+                page.Annotations.Remove(vm);
+                if (SelectedAnnotation == vm) SelectAnnotation(null);
+            }));
+    }
+
+    public void DeleteSelectedAnnotation()
+    {
+        if (SelectedAnnotation is null) return;
+        var target = SelectedAnnotation;
+        var page = Pages[target.PageIndex];
+        int index = page.Annotations.IndexOf(target);
+        if (index < 0) return;
+
+        UndoManager.Execute(new DelegateUndoAction(
+            execute: () =>
+            {
+                page.Annotations.Remove(target);
+                if (SelectedAnnotation == target) SelectAnnotation(null);
+            },
+            undo: () =>
+            {
+                page.Annotations.Insert(Math.Clamp(index, 0, page.Annotations.Count), target);
+                SelectAnnotation(target);
+            }));
+    }
+
+    public void RecordAnnotationMove(AnnotationItemViewModel item, double oldX, double oldY, double newX, double newY)
+    {
+        if (Math.Abs(oldX - newX) < 0.5 && Math.Abs(oldY - newY) < 0.5) return;
+
+        UndoManager.Execute(new DelegateUndoAction(
+            execute: () => item.MoveTo(newX, newY),
+            undo: () => item.MoveTo(oldX, oldY)));
+    }
+
+    public void UpdateAnnotationText(AnnotationItemViewModel item, string newText)
+    {
+        string oldText = item.TextContent;
+        if (oldText == newText) return;
+
+        UndoManager.Execute(new DelegateUndoAction(
+            execute: () => item.TextContent = newText,
+            undo: () => item.TextContent = oldText));
+    }
+
+    public void ApplyPropertiesToSelectedAnnotation()
+    {
+        if (SelectedAnnotation is null) return;
+        var target = SelectedAnnotation;
+
+        string oldColor = target.ColorHex;
+        double oldStroke = target.StrokeThickness;
+        string oldFont = target.FontName;
+        double oldSize = target.FontSize;
+
+        string newColor = SelectedColorHex;
+        double newStroke = Math.Clamp(SelectedStrokeThickness, 0.75, 14);
+        string newFont = SelectedFont;
+        double newSize = ParseFontSize(SelectedFontSize, oldSize);
+
+        UndoManager.Execute(new DelegateUndoAction(
+            execute: () =>
+            {
+                target.ColorHex = newColor;
+                target.StrokeThickness = newStroke;
+                target.FontName = newFont;
+                target.FontSize = newSize;
+            },
+            undo: () =>
+            {
+                target.ColorHex = oldColor;
+                target.StrokeThickness = oldStroke;
+                target.FontName = oldFont;
+                target.FontSize = oldSize;
+            }));
+    }
+
+    public async Task SavePendingAnnotationsAsync(IPdfWriterEngine writerEngine)
+    {
+        var pending = Pages.SelectMany(p => p.Annotations).Select(a => a.Model).ToList();
+        if (pending.Count == 0) return;
+
+        int stayPage = CurrentPage;
+        SelectAnnotation(null);
+
+        await ApplyInPlaceEditAsync(
+            (src, dst) => writerEngine.SaveAnnotations(src, dst, pending),
+            pageToFocusAfterReload: stayPage);
+
+        UndoManager.Clear();
+        IsDirty = false;
+    }
+
+    public static double ParseFontSize(string sizeLabel, double fallback = 13.0)
+    {
+        string digits = sizeLabel.Replace("pt", "", StringComparison.OrdinalIgnoreCase).Trim();
+        return double.TryParse(digits, out double val) ? val : fallback;
+    }
+
+    private sealed class DelegateUndoAction(Action execute, Action undo) : IUndoableAction
+    {
+        public void Execute() => execute();
+        public void Undo() => undo();
     }
 }
