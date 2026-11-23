@@ -1,0 +1,708 @@
+﻿<Window x:Class="PdfStudio.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        xmlns:controls="clr-namespace:PdfStudio.App.Controls"
+        Title="{Binding WindowTitle}"
+        Width="1366" Height="820"
+        MinWidth="1024" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        FontSize="12.5"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        Background="{StaticResource AppBackgroundBrush}"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        StateChanged="Window_StateChanged">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="38"
+                      ResizeBorderThickness="6"
+                      GlassFrameThickness="0"
+                      CornerRadius="10" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Modifiers="Control" Key="O" Command="{Binding OpenFileCommand}" />
+        <KeyBinding Modifiers="Control" Key="F" Command="{Binding OpenSearchBarCommand}" />
+        <KeyBinding Modifiers="Control" Key="P" Command="{Binding PrintDocumentCommand}" />
+        <KeyBinding Modifiers="Control" Key="C" Command="{Binding CopySelectionCommand}" />
+    </Window.InputBindings>
+
+    <Border x:Name="RootBorder" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+        <DockPanel LastChildFill="True">
+
+            <!-- ========================================================= -->
+            <!-- THANH TIÊU ĐỀ HIỆN ĐẠI + QUICK ACCESS TOOLBAR             -->
+            <!-- ========================================================= -->
+            <Grid DockPanel.Dock="Top" Height="38" Background="{StaticResource AppBackgroundBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Logo & Quick Access (bật IsHitTestVisibleInChrome để bấm được) -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <Border Width="22" Height="22" CornerRadius="5" Background="{StaticResource AccentCrimsonBrush}" Margin="0,0,10,0">
+                        <iconPacks:PackIconMaterial Kind="FileDocument" Width="13" Height="13" Foreground="White"
+                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding OpenFileCommand}" ToolTip="Mở file (Ctrl+O)">
+                        <iconPacks:PackIconMaterial Kind="FolderOpen" Width="15" Height="15" />
+                    </Button>
+                    <Button Style="{StaticResource FlatIconButtonStyle}" ToolTip="Lưu (Ctrl+S)">
+                        <iconPacks:PackIconMaterial Kind="ContentSave" Width="15" Height="15" />
+                    </Button>
+                    <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding PrintDocumentCommand}" ToolTip="In tài liệu (Ctrl+P)">
+                        <iconPacks:PackIconMaterial Kind="Printer" Width="15" Height="15" />
+                    </Button>
+                    <Border Width="1" Height="16" Background="{StaticResource BorderSubtleBrush}" Margin="6,0" />
+                    <Button Style="{StaticResource FlatIconButtonStyle}" ToolTip="Hoàn tác (Ctrl+Z)">
+                        <iconPacks:PackIconMaterial Kind="Undo" Width="15" Height="15" />
+                    </Button>
+                    <Button Style="{StaticResource FlatIconButtonStyle}" ToolTip="Làm lại (Ctrl+Y)">
+                        <iconPacks:PackIconMaterial Kind="Redo" Width="15" Height="15" />
+                    </Button>
+                </StackPanel>
+
+                <!-- Tên ứng dụng & Tên file căn giữa -->
+                <TextBlock Grid.Column="1" Text="{Binding WindowTitle}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="12.5" FontWeight="Medium" Foreground="{StaticResource TextSecondaryBrush}" />
+
+                <!-- 3 nút cửa sổ Windows 11 nét mảnh -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Top">
+                    <Button Style="{StaticResource CaptionButtonStyle}" Click="MinimizeButton_Click" ToolTip="Thu nhỏ">
+                        <Path Data="M 0 0 L 10 0" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.1" />
+                    </Button>
+                    <Button x:Name="MaximizeButton" Style="{StaticResource CaptionButtonStyle}" Click="MaximizeButton_Click" ToolTip="Phóng to">
+                        <Path x:Name="MaximizeIcon" Data="M 0 0 L 10 0 L 10 10 L 0 10 Z" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.1" />
+                    </Button>
+                    <Button Style="{StaticResource CaptionCloseButtonStyle}" Click="ExitButton_Click" ToolTip="Đóng">
+                        <Path Data="M 0 0 L 10 10 M 10 0 L 0 10" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.15" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- ========================================================= -->
+            <!-- VÙNG 1: FLOATING RIBBON 7 TAB (KHÔNG BAO GIỜ CHE ICON)    -->
+            <!-- ========================================================= -->
+            <Grid DockPanel.Dock="Top" Background="{StaticResource AppBackgroundBrush}">
+
+                <!-- Nút Tập tin dạng viên thuốc đỏ đô nằm đầu hàng tab -->
+                <Button x:Name="FileMenuButton"
+                        Content="Tập tin"
+                        Width="74" Height="28"
+                        Margin="12,2,0,0"
+                        HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Panel.ZIndex="10"
+                        Style="{StaticResource PrimaryCrimsonButtonStyle}"
+                        FontSize="12.5" Padding="0"
+                        Click="FileMenuButton_Click">
+                    <Button.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Mở file PDF..." InputGestureText="Ctrl+O" Command="{Binding OpenFileCommand}">
+                                <MenuItem.Icon>
+                                    <iconPacks:PackIconMaterial Kind="FolderOpen" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Lưu tài liệu" InputGestureText="Ctrl+S">
+                                <MenuItem.Icon>
+                                    <iconPacks:PackIconMaterial Kind="ContentSave" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="Lưu thành bản sao..." InputGestureText="Ctrl+Shift+S">
+                                <MenuItem.Icon>
+                                    <iconPacks:PackIconMaterial Kind="ContentSaveAll" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <MenuItem Header="In tài liệu..." InputGestureText="Ctrl+P" Command="{Binding PrintDocumentCommand}">
+                                <MenuItem.Icon>
+                                    <iconPacks:PackIconMaterial Kind="Printer" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                            <Separator Margin="6,4" Background="{StaticResource BorderSubtleBrush}" />
+                            <MenuItem Header="Thoát ứng dụng" InputGestureText="Alt+F4" Click="ExitButton_Click">
+                                <MenuItem.Icon>
+                                    <iconPacks:PackIconMaterial Kind="Close" Width="15" Height="15" Foreground="{StaticResource AccentCrimsonBrush}" />
+                                </MenuItem.Icon>
+                            </MenuItem>
+                        </ContextMenu>
+                    </Button.ContextMenu>
+                </Button>
+
+                <!-- 6 Tab Ribbon chính (mặc định mở Tab Chỉnh sửa) -->
+                <TabControl Style="{StaticResource ModernRibbonTabControlStyle}" SelectedIndex="1">
+
+                    <!-- Tab: Trang chủ -->
+                    <TabItem Header="Trang chủ">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding OpenFileCommand}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FolderOpen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                                    <TextBlock Text="Mở file" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                        IsChecked="{Binding IsHandTool, Mode=OneWay}"
+                                        Command="{Binding SetHandToolCommand}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="CursorMove" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Bàn tay" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                        IsChecked="{Binding IsSelectTextTool, Mode=OneWay}"
+                                        Command="{Binding SetSelectTextToolCommand}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FormatText" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Chọn chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding OpenSearchBarCommand}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Magnify" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                                    <TextBlock Text="Tìm kiếm" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Marker" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#CA8A04" />
+                                    <TextBlock Text="Highlight" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Pen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#0284C7" />
+                                    <TextBlock Text="Ký tên" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FileMultiple" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                                    <TextBlock Text="Gộp PDF" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </TabItem>
+
+                    <!-- Tab: Chỉnh sửa -->
+                    <TabItem Header="Chỉnh sửa">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Nhóm Di chuyển & Chọn -->
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                        IsChecked="{Binding IsHandTool, Mode=OneWay}"
+                                        Command="{Binding SetHandToolCommand}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="CursorMove" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Bàn tay" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="CursorDefault" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                                    <TextBlock Text="Chọn vùng" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                        IsChecked="{Binding IsSelectTextTool, Mode=OneWay}"
+                                        Command="{Binding SetSelectTextToolCommand}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FormatText" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Chọn chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+
+                            <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                            <!-- Nhóm Sửa nội dung -->
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}" IsChecked="{Binding IsEditTextMode}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Pencil" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                                    <TextBlock Text="Sửa văn bản" FontSize="11.5" FontWeight="SemiBold" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FormatSize" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Thêm chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Image" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#059669" />
+                                    <TextBlock Text="Thêm ảnh" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="EyeOff" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                                    <TextBlock Text="Che phủ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                            <!-- Nhóm Chú thích -->
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Marker" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#CA8A04" />
+                                    <TextBlock Text="Highlight" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Note" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                                    <TextBlock Text="Ghi chú" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+
+                            <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                            <!-- Nhóm Phông chữ nhanh -->
+                            <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="2,0">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <ComboBox Width="136" Height="28" Margin="0,0,6,0"
+                                              ItemsSource="{Binding AvailableFonts}"
+                                              SelectedItem="{Binding ActiveTab.SelectedFont}" />
+                                    <ComboBox Width="72" Height="28"
+                                              ItemsSource="{Binding AvailableFontSizes}"
+                                              SelectedItem="{Binding ActiveTab.SelectedFontSize}" />
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal">
+                                    <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" ToolTip="In đậm (Ctrl+B)">
+                                        <iconPacks:PackIconMaterial Kind="FormatBold" Width="15" Height="15" />
+                                    </ToggleButton>
+                                    <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" ToolTip="In nghiêng (Ctrl+I)">
+                                        <iconPacks:PackIconMaterial Kind="FormatItalic" Width="15" Height="15" />
+                                    </ToggleButton>
+                                    <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" ToolTip="Gạch dưới (Ctrl+U)">
+                                        <iconPacks:PackIconMaterial Kind="FormatUnderline" Width="15" Height="15" />
+                                    </ToggleButton>
+                                    <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" ToolTip="Gạch ngang">
+                                        <iconPacks:PackIconMaterial Kind="FormatStrikethrough" Width="15" Height="15" />
+                                    </ToggleButton>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                            <!-- Nhóm Ký & Đóng dấu -->
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Certificate" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                                    <TextBlock Text="Ký số" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Pen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#0284C7" />
+                                    <TextBlock Text="Ký ảnh" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="ShieldCheck" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                                    <TextBlock Text="Đóng dấu" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </TabItem>
+
+                    <!-- Tab: Bình luận -->
+                    <TabItem Header="Bình luận">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Marker" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#CA8A04" />
+                                    <TextBlock Text="Highlight" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FormatUnderline" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#16A34A" />
+                                    <TextBlock Text="Gạch dưới" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Note" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                                    <TextBlock Text="Sticky Note" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Pen" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Vẽ tự do" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </TabItem>
+
+                    <!-- Tab: Tổ chức -->
+                    <TabItem Header="Tổ chức">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="FileMultiple" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                                    <TextBlock Text="Gộp file" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="ContentCut" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Tách trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="RotateRight" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Xoay trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Delete" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                                    <TextBlock Text="Xóa trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </TabItem>
+
+                    <!-- Tab: Bảo mật -->
+                    <TabItem Header="Bảo mật">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="Lock" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                                    <TextBlock Text="Mật khẩu" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="ZipBox" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#059669" />
+                                    <TextBlock Text="Nén file" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <Button Style="{StaticResource RibbonLargeButtonStyle}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="EyeOff" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                                    <TextBlock Text="Che vĩnh viễn" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </TabItem>
+
+                    <!-- Tab: Xem -->
+                    <TabItem Header="Xem">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}" IsChecked="{Binding IsLeftPaneVisible}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="DockLeft" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Cột Trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}" IsChecked="{Binding IsRightPaneVisible}">
+                                <StackPanel HorizontalAlignment="Center">
+                                    <iconPacks:PackIconMaterial Kind="DockRight" Width="21" Height="21" HorizontalAlignment="Center" />
+                                    <TextBlock Text="Thuộc tính" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                                </StackPanel>
+                            </ToggleButton>
+                        </StackPanel>
+                    </TabItem>
+                </TabControl>
+            </Grid>
+
+            <!-- ========================================================= -->
+            <!-- VÙNG 5: THANH TRẠNG THÁI (STATUS BAR - BOTTOM)            -->
+            <!-- ========================================================= -->
+            <Border DockPanel.Dock="Bottom"
+                    Height="34"
+                    Background="{StaticResource SurfaceWhiteBrush}"
+                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="14,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Số trang -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Trang " Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="{Binding ActiveTab.CurrentPage, FallbackValue=0}" FontWeight="SemiBold" />
+                        <TextBlock Text=" / " Foreground="{StaticResource TextSecondaryBrush}" />
+                        <TextBlock Text="{Binding ActiveTab.TotalPages, FallbackValue=0}" />
+                    </StackPanel>
+
+                    <!-- Zoom & Chế độ xem -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ZoomOutCommand}" ToolTip="Thu nhỏ">
+                            <iconPacks:PackIconMaterial Kind="MagnifyMinus" Width="15" Height="15" />
+                        </Button>
+                        <Slider Width="116" Minimum="25" Maximum="400" Margin="6,0"
+                                Value="{Binding ActiveTab.ZoomPercent, FallbackValue=100}" />
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ZoomInCommand}" ToolTip="Phóng to">
+                            <iconPacks:PackIconMaterial Kind="MagnifyPlus" Width="15" Height="15" />
+                        </Button>
+                        <TextBlock Text="{Binding ActiveTab.ZoomPercent, StringFormat={}{0:0}%, FallbackValue=100%}"
+                                   Width="46" TextAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" />
+                        <Border Width="1" Height="14" Background="{StaticResource BorderSubtleBrush}" Margin="12,0" />
+                        <TextBlock Text="{Binding ActiveTab.ViewModeText, FallbackValue='1 trang / Liên tục'}"
+                                   VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ========================================================= -->
+            <!-- KHU VỰC NỘI DUNG CHÍNH (TRÁI - GIỮA - PHẢI)               -->
+            <!-- ========================================================= -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="46" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Thanh công cụ dọc ngoài cùng bên trái -->
+                <Border Grid.Column="0"
+                        Background="{StaticResource SurfaceWhiteBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="0,1,1,0">
+                    <StackPanel Margin="0,10">
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Margin="6,4" Width="34" Height="34"
+                                Command="{Binding ToggleLeftPaneCommand}" ToolTip="Trang thu nhỏ (Thumbnails)">
+                            <iconPacks:PackIconMaterial Kind="FileMultiple" Width="18" Height="18"
+                                                        Foreground="{StaticResource AccentCrimsonBrush}" />
+                        </Button>
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Margin="6,4" Width="34" Height="34" ToolTip="Mục lục (Bookmarks)">
+                            <iconPacks:PackIconMaterial Kind="Bookmark" Width="18" Height="18" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </Button>
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Margin="6,4" Width="34" Height="34" ToolTip="Danh sách Bình luận">
+                            <iconPacks:PackIconMaterial Kind="Comment" Width="18" Height="18" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </Button>
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Margin="6,4" Width="34" Height="34" ToolTip="Tệp đính kèm">
+                            <iconPacks:PackIconMaterial Kind="Paperclip" Width="18" Height="18" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <!-- VÙNG 2: PANEL THUMBNAILS BÊN TRÁI -->
+                <Border Grid.Column="1" Width="196"
+                        Visibility="{Binding IsLeftPaneVisible, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource SurfaceSubtleBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="0,1,1,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Padding="12,10"
+                                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource FlatIconButtonStyle}"
+                                        Command="{Binding ToggleLeftPaneCommand}" MinWidth="24" MinHeight="24" Padding="4">
+                                    <iconPacks:PackIconMaterial Kind="Close" Width="12" Height="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                                </Button>
+                                <TextBlock Text="Trang thu nhỏ" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+
+                        <ScrollViewer x:Name="ThumbnailScrollViewer"
+                                      VerticalScrollBarVisibility="Auto"
+                                      ScrollChanged="ThumbnailScrollViewer_ScrollChanged"
+                                      Padding="10">
+                            <ItemsControl ItemsSource="{Binding ActiveTab.Pages}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Margin="0,0,0,14" Padding="0" Background="Transparent" BorderThickness="0"
+                                                Cursor="Hand"
+                                                Command="{Binding DataContext.SelectPageCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <Border Width="122" Height="162" Background="White" CornerRadius="6"
+                                                        BorderThickness="2" ClipToBounds="True">
+                                                    <Border.Effect>
+                                                        <DropShadowEffect Color="#111827" Opacity="0.06" BlurRadius="8" ShadowDepth="2" />
+                                                    </Border.Effect>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="BorderBrush" Value="{StaticResource AccentCrimsonBrush}" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <Grid>
+                                                        <TextBlock Text="{Binding PageNumber}" FontSize="18" FontWeight="Light"
+                                                                   Foreground="#D1D5DB" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                        <Image Source="{Binding ThumbnailImage}" Stretch="Uniform"
+                                                               RenderOptions.BitmapScalingMode="HighQuality" />
+                                                    </Grid>
+                                                </Border>
+                                                <TextBlock Text="{Binding Label}" Margin="0,6,0,0" FontSize="11.5"
+                                                           HorizontalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <!-- VÙNG 3: MULTI-TAB TÀI LIỆU & KHUNG HIỂN THỊ TRANG PDF -->
+                <DockPanel Grid.Column="2" Background="{StaticResource CanvasWorkspaceBrush}">
+                    <Border DockPanel.Dock="Top" Background="{StaticResource AppBackgroundBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,1,0,1" Padding="8,0">
+                        <DockPanel>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource FlatIconButtonStyle}"
+                                    Command="{Binding OpenFileCommand}" ToolTip="Mở thêm file PDF" Margin="4,4">
+                                <iconPacks:PackIconMaterial Kind="Plus" Width="15" Height="15" />
+                            </Button>
+
+                            <TabControl ItemsSource="{Binding Tabs}"
+                                        SelectedItem="{Binding ActiveTab}"
+                                        ItemContainerStyle="{StaticResource DocumentTabItemStyle}"
+                                        Background="Transparent" BorderThickness="0" Padding="0">
+                                <TabControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <iconPacks:PackIconMaterial Kind="FileDocument" Width="15" Height="15"
+                                                                        Foreground="{StaticResource AccentCrimsonBrush}" Margin="0,0,7,0" />
+                                            <TextBlock Text="{Binding FileName}" MaxWidth="200" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                            <Button Margin="8,0,0,0" MinWidth="20" MinHeight="20" Padding="3" Style="{StaticResource FlatIconButtonStyle}"
+                                                    Command="{Binding DataContext.CloseTabCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}">
+                                                <iconPacks:PackIconMaterial Kind="Close" Width="10" Height="10" Foreground="{StaticResource TextSecondaryBrush}" />
+                                            </Button>
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </TabControl.ItemTemplate>
+                                <TabControl.ContentTemplate>
+                                    <DataTemplate />
+                                </TabControl.ContentTemplate>
+                            </TabControl>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Viewport hiển thị trang PDF (Sẽ thay bằng PdfViewportControl + MuPDFCore ở Bước 2) -->
+                    <Grid>
+                        <!-- Trình xem PDF thật bằng MuPDFCore -->
+                        <controls:PdfViewportControl x:Name="ViewportControl"
+                             DataContext="{Binding ActiveTab}"
+                             Visibility="{Binding DataContext.HasActiveTab, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
+                        <!-- Màn hình chào khi chưa mở tệp nào -->
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Visible" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasActiveTab}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+
+                            <Border Width="64" Height="64" CornerRadius="16" Background="White" Margin="0,0,0,14" HorizontalAlignment="Center">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#111827" Opacity="0.08" BlurRadius="16" ShadowDepth="3" />
+                                </Border.Effect>
+                                <iconPacks:PackIconMaterial Kind="FileDocument" Width="30" Height="30"
+                                                            Foreground="{StaticResource AccentCrimsonBrush}"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Chưa có tài liệu PDF nào đang mở" FontSize="16" FontWeight="SemiBold"
+                                       HorizontalAlignment="Center" Margin="0,0,0,6" />
+                            <TextBlock Text="Kéo thả tệp .pdf vào cửa sổ này hoặc nhấn Ctrl+O để bắt đầu"
+                                       Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,18" />
+                            <Button Content="Mở tệp PDF..." Style="{StaticResource PrimaryCrimsonButtonStyle}"
+                                    Command="{Binding OpenFileCommand}" HorizontalAlignment="Center" Width="150" />
+                        </StackPanel>
+                    </Grid>
+                </DockPanel>
+
+                <!-- VÙNG 4: BẢNG THUỘC TÍNH NGỮ CẢNH BÊN PHẢI -->
+                <Border Grid.Column="3" Width="252"
+                        Visibility="{Binding IsRightPaneVisible, Converter={StaticResource BoolToVis}}"
+                        Background="{StaticResource SurfaceSubtleBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="1,1,0,0">
+                    <DockPanel>
+                        <Border DockPanel.Dock="Top" Padding="14,10"
+                                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+                            <DockPanel>
+                                <Button DockPanel.Dock="Right" Style="{StaticResource FlatIconButtonStyle}"
+                                        Command="{Binding ToggleRightPaneCommand}" MinWidth="24" MinHeight="24" Padding="4">
+                                    <iconPacks:PackIconMaterial Kind="Close" Width="12" Height="12" Foreground="{StaticResource TextSecondaryBrush}" />
+                                </Button>
+                                <TextBlock Text="Thuộc tính" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </DockPanel>
+                        </Border>
+
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="12">
+                            <!-- Card nhóm Định dạng chữ -->
+                            <Border Background="White" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                                    CornerRadius="9" Padding="12">
+                                <StackPanel>
+                                    <TextBlock Text="Định dạng chữ" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,14" />
+
+                                    <TextBlock Text="Phông chữ" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5" />
+                                    <ComboBox Margin="0,0,0,12"
+                                              ItemsSource="{Binding AvailableFonts}"
+                                              SelectedItem="{Binding ActiveTab.SelectedFont}" />
+
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="10" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="Cỡ chữ" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5" />
+                                            <ComboBox ItemsSource="{Binding AvailableFontSizes}"
+                                                      SelectedItem="{Binding ActiveTab.SelectedFontSize}" />
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Giãn dòng" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5" />
+                                            <TextBox Text="{Binding ActiveTab.LineSpacing}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <TextBlock Text="Màu chữ" FontSize="11.5" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                                        <Border Width="24" Height="24" Background="#111827" CornerRadius="12" Margin="0,0,8,0" BorderBrush="#E5E7EB" BorderThickness="2" Cursor="Hand" />
+                                        <Border Width="24" Height="24" Background="#B91C1C" CornerRadius="12" Margin="0,0,8,0" BorderBrush="#FECACA" BorderThickness="2" Cursor="Hand" />
+                                        <Border Width="24" Height="24" Background="#2563EB" CornerRadius="12" Margin="0,0,8,0" BorderBrush="#E5E7EB" BorderThickness="2" Cursor="Hand" />
+                                        <Border Width="24" Height="24" Background="#059669" CornerRadius="12" BorderBrush="#E5E7EB" BorderThickness="2" Cursor="Hand" />
+                                    </StackPanel>
+
+                                    <Button Content="Áp dụng thay đổi" Style="{StaticResource PrimaryCrimsonButtonStyle}" />
+                                </StackPanel>
+                            </Border>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+            </Grid>
+        </DockPanel>
+    </Border>
+</Window>

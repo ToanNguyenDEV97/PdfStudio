@@ -1,0 +1,170 @@
+<UserControl x:Class="PdfStudio.App.Controls.PdfViewportControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+    </UserControl.Resources>
+
+    <Grid>
+        <!-- Khung cuộn ảo hóa các trang PDF -->
+        <ScrollViewer x:Name="MainScrollViewer"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto"
+                      ScrollChanged="MainScrollViewer_ScrollChanged"
+                      PreviewMouseWheel="MainScrollViewer_PreviewMouseWheel"
+                      PreviewMouseLeftButtonDown="MainScrollViewer_PreviewMouseLeftButtonDown"
+                      PreviewMouseMove="MainScrollViewer_PreviewMouseMove"
+                      PreviewMouseLeftButtonUp="MainScrollViewer_PreviewMouseLeftButtonUp"
+                      Background="Transparent"
+                      Padding="24,20">
+
+            <ItemsControl ItemsSource="{Binding Pages}" HorizontalAlignment="Center">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Width="{Binding DisplayWidth}"
+                                Height="{Binding DisplayHeight}"
+                                Margin="0,0,0,18"
+                                Background="White"
+                                CornerRadius="2">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#111827" Opacity="0.13" BlurRadius="16" ShadowDepth="3" />
+                            </Border.Effect>
+
+                            <Grid>
+                                <!-- Số trang mờ hiện tạm khi chờ render -->
+                                <TextBlock Text="{Binding Label}"
+                                           Foreground="#D1D5DB" FontSize="15"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+                                <!-- Lớp 1: Ảnh trang PDF từ MuPDFCore -->
+                                <Image Source="{Binding PageImage}"
+                                       Stretch="Fill"
+                                       RenderOptions.BitmapScalingMode="HighQuality" />
+
+                                <!-- Lớp 2: Overlay tọa độ 72 DPI tự co giãn khớp 100% mọi mức Zoom -->
+                                <Viewbox Stretch="Fill">
+                                    <Canvas Width="{Binding WidthPoints}"
+                                            Height="{Binding HeightPoints}"
+                                            Background="Transparent"
+                                            Tag="{Binding PageIndex}"
+                                            MouseLeftButtonDown="PageOverlay_MouseLeftButtonDown"
+                                            MouseMove="PageOverlay_MouseMove"
+                                            MouseLeftButtonUp="PageOverlay_MouseLeftButtonUp">
+
+                                        <!-- Menu chuột phải Copy nhanh -->
+                                        <Canvas.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Sao chép văn bản" InputGestureText="Ctrl+C"
+                                                          Click="ContextCopy_Click">
+                                                    <MenuItem.Icon>
+                                                        <iconPacks:PackIconMaterial Kind="ContentCopy" Width="14" Height="14" />
+                                                    </MenuItem.Icon>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </Canvas.ContextMenu>
+
+                                        <!-- Khung highlight kết quả Tìm kiếm Ctrl+F -->
+                                        <ItemsControl ItemsSource="{Binding SearchRects}" IsHitTestVisible="False">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Width="{Binding Width}" Height="{Binding Height}" CornerRadius="1">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#7AFACC15" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                        <Setter Property="Background" Value="#AAF97316" />
+                                                                        <Setter Property="BorderBrush" Value="#C2410C" />
+                                                                        <Setter Property="BorderThickness" Value="0.8" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+
+                                        <!-- Khung bôi đen Chọn chữ -->
+                                        <ItemsControl ItemsSource="{Binding SelectionRects}" IsHitTestVisible="False">
+                                            <ItemsControl.ItemsPanel>
+                                                <ItemsPanelTemplate>
+                                                    <Canvas />
+                                                </ItemsPanelTemplate>
+                                            </ItemsControl.ItemsPanel>
+                                            <ItemsControl.ItemContainerStyle>
+                                                <Style TargetType="ContentPresenter">
+                                                    <Setter Property="Canvas.Left" Value="{Binding X}" />
+                                                    <Setter Property="Canvas.Top" Value="{Binding Y}" />
+                                                </Style>
+                                            </ItemsControl.ItemContainerStyle>
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Width="{Binding Width}" Height="{Binding Height}"
+                                                            Background="#502563EB" CornerRadius="1" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </Canvas>
+                                </Viewbox>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- Thanh Tìm kiếm nổi Ctrl+F (Windows 11 Floating Bar) -->
+        <Border x:Name="SearchBarBorder"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,14,26,0"
+                Padding="10,7"
+                Background="White"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Visibility="{Binding DataContext.IsSearchBarVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}">
+            <Border.Effect>
+                <DropShadowEffect Color="#111827" Opacity="0.14" BlurRadius="18" ShadowDepth="4" />
+            </Border.Effect>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBox x:Name="SearchInputBox"
+                         Width="220" Height="30"
+                         Text="{Binding DataContext.SearchQuery, RelativeSource={RelativeSource AncestorType=Window}, UpdateSourceTrigger=PropertyChanged}"
+                         KeyDown="SearchInputBox_KeyDown" />
+
+                <TextBlock Text="{Binding SearchStatusText}"
+                           MinWidth="46" TextAlignment="Center" VerticalAlignment="Center"
+                           Margin="8,0" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" />
+
+                <Button Style="{StaticResource FlatIconButtonStyle}" ToolTip="Kết quả trước (Shift+Enter)"
+                        Command="{Binding DataContext.FindPreviousCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                    <iconPacks:PackIconMaterial Kind="ChevronUp" Width="15" Height="15" />
+                </Button>
+                <Button Style="{StaticResource FlatIconButtonStyle}" ToolTip="Kết quả tiếp theo (Enter)"
+                        Command="{Binding DataContext.FindNextCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                    <iconPacks:PackIconMaterial Kind="ChevronDown" Width="15" Height="15" />
+                </Button>
+                <Button Style="{StaticResource FlatIconButtonStyle}" ToolTip="Đóng (Esc)" Margin="4,0,0,0"
+                        Command="{Binding DataContext.CloseSearchBarCommand, RelativeSource={RelativeSource AncestorType=Window}}">
+                    <iconPacks:PackIconMaterial Kind="Close" Width="13" Height="13" />
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>
