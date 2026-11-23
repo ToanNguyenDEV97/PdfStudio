@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{4C0CBEC2-8A37-4ED7-90E8-85860A1C38DC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfStudio.App", "src\PdfStudio.App\PdfStudio.App.csproj", "{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A} = {4C0CBEC2-8A37-4ED7-90E8-85860A1C38DC}
+	EndGlobalSection
+EndGlobal

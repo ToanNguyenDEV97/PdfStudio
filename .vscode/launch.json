@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run PdfStudio (WPF)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build-app",
+      "program": "${workspaceFolder}/src/PdfStudio.App/bin/Debug/net8.0-windows/PdfStudio.App.exe",
+      "args": [],
+      "cwd": "${workspaceFolder}/src/PdfStudio.App",
+      "console": "internalConsole",
+      "stopAtEntry": false
+    }
+  ]
+}
