@@ -7,6 +7,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{4C0CBEC2-8A3
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfStudio.App", "src\PdfStudio.App\PdfStudio.App.csproj", "{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfStudio.Engines", "src\PdfStudio.Engines\PdfStudio.Engines.csproj", "{3407FCAB-8FD5-4C60-B9AA-251106EC8C55}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PdfStudio.Core", "src\PdfStudio.Core\PdfStudio.Core.csproj", "{0EFA98D6-763F-429C-A765-41014AAB7421}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +24,18 @@ Global
 		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3407FCAB-8FD5-4C60-B9AA-251106EC8C55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3407FCAB-8FD5-4C60-B9AA-251106EC8C55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3407FCAB-8FD5-4C60-B9AA-251106EC8C55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3407FCAB-8FD5-4C60-B9AA-251106EC8C55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0EFA98D6-763F-429C-A765-41014AAB7421}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0EFA98D6-763F-429C-A765-41014AAB7421}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0EFA98D6-763F-429C-A765-41014AAB7421}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0EFA98D6-763F-429C-A765-41014AAB7421}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{F5EA5809-EBF3-4C7C-AC85-35B19AF50D0A} = {4C0CBEC2-8A37-4ED7-90E8-85860A1C38DC}
+		{3407FCAB-8FD5-4C60-B9AA-251106EC8C55} = {4C0CBEC2-8A37-4ED7-90E8-85860A1C38DC}
+		{0EFA98D6-763F-429C-A765-41014AAB7421} = {4C0CBEC2-8A37-4ED7-90E8-85860A1C38DC}
 	EndGlobalSection
 EndGlobal

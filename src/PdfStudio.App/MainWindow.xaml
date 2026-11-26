@@ -84,10 +84,10 @@
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0"
                             WindowChrome.IsHitTestVisibleInChrome="True">
-                    <Border Width="22" Height="22" CornerRadius="5" Background="{StaticResource AccentCrimsonBrush}" Margin="0,0,10,0">
-                        <iconPacks:PackIconMaterial Kind="FileDocument" Width="13" Height="13" Foreground="White"
-                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Border>
+                    <Image Source="pack://application:,,,/Assets/app.ico"
+                        Width="22" Height="22"
+                        Margin="0,0,10,0"
+                        RenderOptions.BitmapScalingMode="HighQuality" />
 
                     <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding OpenFileCommand}" ToolTip="Mở file (Ctrl+O)">
                         <iconPacks:PackIconMaterial Kind="FolderOpen" Width="15" Height="15" />
