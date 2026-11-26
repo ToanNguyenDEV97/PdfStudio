@@ -1,0 +1,367 @@
+<UserControl x:Class="PdfStudio.App.Views.RibbonBarView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks">
+
+    <Grid Background="{StaticResource AppBackgroundBrush}">
+        <Button x:Name="FileMenuButton"
+                Content="Tập tin"
+                Width="74" Height="28"
+                Margin="12,2,0,0"
+                HorizontalAlignment="Left" VerticalAlignment="Top"
+                Panel.ZIndex="10"
+                Style="{StaticResource PrimaryCrimsonButtonStyle}"
+                FontSize="12.5" Padding="0"
+                Click="FileMenuButton_Click">
+            <Button.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="Mở file PDF..." InputGestureText="Ctrl+O" Command="{Binding OpenFileCommand}">
+                        <MenuItem.Icon>
+                            <iconPacks:PackIconMaterial Kind="FolderOpen" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="Lưu tài liệu" InputGestureText="Ctrl+S" Command="{Binding SaveDocumentCommand}">
+                        <MenuItem.Icon>
+                            <iconPacks:PackIconMaterial Kind="ContentSave" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="Lưu thành bản sao..." InputGestureText="Ctrl+Shift+S" Command="{Binding SaveCopyCommand}">
+                        <MenuItem.Icon>
+                            <iconPacks:PackIconMaterial Kind="ContentSaveAll" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <MenuItem Header="In tài liệu..." InputGestureText="Ctrl+P" Command="{Binding PrintDocumentCommand}">
+                        <MenuItem.Icon>
+                            <iconPacks:PackIconMaterial Kind="Printer" Width="15" Height="15" Foreground="{StaticResource TextSecondaryBrush}" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                    <Separator Margin="6,4" Background="{StaticResource BorderSubtleBrush}" />
+                    <MenuItem Header="Thoát ứng dụng" InputGestureText="Alt+F4" Click="ExitMenuItem_Click">
+                        <MenuItem.Icon>
+                            <iconPacks:PackIconMaterial Kind="Close" Width="15" Height="15" Foreground="{StaticResource AccentCrimsonBrush}" />
+                        </MenuItem.Icon>
+                    </MenuItem>
+                </ContextMenu>
+            </Button.ContextMenu>
+        </Button>
+
+        <TabControl Style="{StaticResource ModernRibbonTabControlStyle}" SelectedIndex="0">
+
+            <!-- Tab: Trang chủ -->
+            <TabItem Header="Trang chủ">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding OpenFileCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FolderOpen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                            <TextBlock Text="Mở file" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsHandTool, Mode=OneWay}"
+                                  Command="{Binding SetHandToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="CursorMove" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Bàn tay" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsSelectTextTool, Mode=OneWay}"
+                                  Command="{Binding SetSelectTextToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FormatText" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Chọn chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding OpenSearchBarCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Magnify" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                            <TextBlock Text="Tìm kiếm" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsHighlightTool, Mode=OneWay}"
+                                  Command="{Binding SetHighlightToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Marker" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#CA8A04" />
+                            <TextBlock Text="Highlight" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding MergeFilesCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FileMultiple" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                            <TextBlock Text="Gộp PDF" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Pen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#0284C7" />
+                            <TextBlock Text="Ký tên" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Tab: Chỉnh sửa -->
+            <TabItem Header="Chỉnh sửa">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsHandTool, Mode=OneWay}"
+                                  Command="{Binding SetHandToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="CursorMove" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Bàn tay" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsSelectObjectTool, Mode=OneWay}"
+                                  Command="{Binding SetSelectObjectToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="CursorDefault" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                            <TextBlock Text="Chọn ghi chú" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsSelectTextTool, Mode=OneWay}"
+                                  Command="{Binding SetSelectTextToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FormatText" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Chọn chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsFreeTextTool, Mode=OneWay}"
+                                  Command="{Binding SetFreeTextToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FormatSize" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Thêm chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsHighlightTool, Mode=OneWay}"
+                                  Command="{Binding SetHighlightToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Marker" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#CA8A04" />
+                            <TextBlock Text="Highlight" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsStickyNoteTool, Mode=OneWay}"
+                                  Command="{Binding SetStickyNoteToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Note" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                            <TextBlock Text="Ghi chú" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+
+                    <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                    <StackPanel Orientation="Vertical" VerticalAlignment="Center" Margin="2,0">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                            <ComboBox Width="136" Height="28" Margin="0,0,6,0"
+                                      ItemsSource="{Binding AvailableFonts}"
+                                      SelectedItem="{Binding ActiveTab.SelectedFont}" />
+                            <ComboBox Width="72" Height="28"
+                                      ItemsSource="{Binding AvailableFontSizes}"
+                                      SelectedItem="{Binding ActiveTab.SelectedFontSize}" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" IsEnabled="False" Opacity="0.4" ToolTip="Sắp ra mắt">
+                                <iconPacks:PackIconMaterial Kind="FormatBold" Width="15" Height="15" />
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" IsEnabled="False" Opacity="0.4" ToolTip="Sắp ra mắt">
+                                <iconPacks:PackIconMaterial Kind="FormatItalic" Width="15" Height="15" />
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" IsEnabled="False" Opacity="0.4" ToolTip="Sắp ra mắt">
+                                <iconPacks:PackIconMaterial Kind="FormatUnderline" Width="15" Height="15" />
+                            </ToggleButton>
+                            <ToggleButton Style="{StaticResource RibbonSmallToggleButtonStyle}" IsEnabled="False" Opacity="0.4" ToolTip="Sắp ra mắt">
+                                <iconPacks:PackIconMaterial Kind="FormatStrikethrough" Width="15" Height="15" />
+                            </ToggleButton>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Pencil" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                            <TextBlock Text="Sửa văn bản" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Image" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#059669" />
+                            <TextBlock Text="Thêm ảnh" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="EyeOff" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                            <TextBlock Text="Che phủ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Certificate" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                            <TextBlock Text="Ký số" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="ShieldCheck" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                            <TextBlock Text="Đóng dấu" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Tab: Bình luận -->
+            <TabItem Header="Bình luận">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsSelectObjectTool, Mode=OneWay}"
+                                  Command="{Binding SetSelectObjectToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="CursorDefault" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                            <TextBlock Text="Chọn ghi chú" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsHighlightTool, Mode=OneWay}"
+                                  Command="{Binding SetHighlightToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Marker" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#CA8A04" />
+                            <TextBlock Text="Highlight" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsUnderlineTool, Mode=OneWay}"
+                                  Command="{Binding SetUnderlineToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FormatUnderline" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#16A34A" />
+                            <TextBlock Text="Gạch dưới" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsStickyNoteTool, Mode=OneWay}"
+                                  Command="{Binding SetStickyNoteToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Note" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                            <TextBlock Text="Sticky Note" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsFreeTextTool, Mode=OneWay}"
+                                  Command="{Binding SetFreeTextToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FormatSize" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Thêm chữ" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}"
+                                  IsChecked="{Binding IsInkTool, Mode=OneWay}"
+                                  Command="{Binding SetInkToolCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Pen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="{StaticResource AccentCrimsonBrush}" />
+                            <TextBlock Text="Vẽ tự do" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding DeleteSelectedAnnotationCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Delete" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                            <TextBlock Text="Xóa chọn" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Tab: Tổ chức -->
+            <TabItem Header="Tổ chức">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding MergeFilesCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="FileMultiple" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                            <TextBlock Text="Gộp file" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding SplitPagesCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="ContentCut" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Tách trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding RotateCurrentPageCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="RotateRight" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Xoay trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding DeleteCurrentPageCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Delete" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                            <TextBlock Text="Xóa trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Tab: Bảo mật -->
+            <TabItem Header="Bảo mật">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding ProtectWithPasswordCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Lock" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#D97706" />
+                            <TextBlock Text="Mật khẩu" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding CompressCurrentFileCommand}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="ZipBox" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#059669" />
+                            <TextBlock Text="Nén file" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" IsEnabled="False" Opacity="0.45" ToolTip="Sắp ra mắt">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="EyeOff" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#DC2626" />
+                            <TextBlock Text="Che vĩnh viễn" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </TabItem>
+
+            <!-- Tab: Xem -->
+            <TabItem Header="Xem">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}" IsChecked="{Binding IsLeftPaneVisible}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="DockLeft" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Cột Trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource RibbonLargeToggleButtonStyle}" IsChecked="{Binding IsRightPaneVisible}">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="DockRight" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Thuộc tính" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </ToggleButton>
+                </StackPanel>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

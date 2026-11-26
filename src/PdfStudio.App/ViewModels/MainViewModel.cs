@@ -4,9 +4,9 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
-using PdfStudio.Core.Models;
 using PdfStudio.App.Views;
 using PdfStudio.Core.Interfaces;
+using PdfStudio.Core.Models;
 using PdfStudio.Engines.IText;
 
 namespace PdfStudio.App.ViewModels;
@@ -14,11 +14,157 @@ namespace PdfStudio.App.ViewModels;
 public partial class MainViewModel : ObservableObject
 {
     private readonly IPdfWriterEngine _writerEngine = new ITextWriterEngine();
+    private CancellationTokenSource? _searchDebounceCts;
+
+    public ObservableCollection<DocumentTabViewModel> Tabs { get; } = [];
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(WindowTitle))]
+    [NotifyPropertyChangedFor(nameof(HasActiveTab))]
+    private DocumentTabViewModel? _activeTab;
+
+    [ObservableProperty] private bool _isLeftPaneVisible = true;
+    [ObservableProperty] private bool _isRightPaneVisible = true;
+    [ObservableProperty] private bool _isSearchBarVisible;
+    [ObservableProperty] private string _searchQuery = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsHandTool))]
+    [NotifyPropertyChangedFor(nameof(IsSelectTextTool))]
+    [NotifyPropertyChangedFor(nameof(IsSelectObjectTool))]
+    [NotifyPropertyChangedFor(nameof(IsEditTextMode))]
+    [NotifyPropertyChangedFor(nameof(IsHighlightTool))]
+    [NotifyPropertyChangedFor(nameof(IsUnderlineTool))]
+    [NotifyPropertyChangedFor(nameof(IsStickyNoteTool))]
+    [NotifyPropertyChangedFor(nameof(IsFreeTextTool))]
+    [NotifyPropertyChangedFor(nameof(IsInkTool))]
+    private ViewerToolMode _activeTool = ViewerToolMode.SelectText;
+
+    public bool IsHandTool => ActiveTool == ViewerToolMode.Hand;
+    public bool IsSelectTextTool => ActiveTool == ViewerToolMode.SelectText;
+    public bool IsSelectObjectTool => ActiveTool == ViewerToolMode.SelectObject;
+    public bool IsHighlightTool => ActiveTool == ViewerToolMode.Highlight;
+    public bool IsUnderlineTool => ActiveTool == ViewerToolMode.Underline;
+    public bool IsStickyNoteTool => ActiveTool == ViewerToolMode.StickyNote;
+    public bool IsFreeTextTool => ActiveTool == ViewerToolMode.FreeText;
+    public bool IsInkTool => ActiveTool == ViewerToolMode.Ink;
+
+    public bool IsEditTextMode
+    {
+        get => ActiveTool == ViewerToolMode.EditText;
+        set => ActiveTool = value ? ViewerToolMode.EditText : ViewerToolMode.SelectText;
+    }
+
+    public string[] AvailableFonts { get; } = ["Arial", "Times New Roman", "Calibri", "Tahoma", "Segoe UI"];
+    public string[] AvailableFontSizes { get; } = ["10 pt", "11 pt", "12 pt", "14 pt", "16 pt", "18 pt", "24 pt"];
+
+    public bool HasActiveTab => ActiveTab is not null;
+
+    public string WindowTitle => ActiveTab is null
+        ? "PdfStudio (Nội bộ)"
+        : $"PdfStudio (Nội bộ) - {ActiveTab.FileName}";
+
+    partial void OnActiveTabChanging(DocumentTabViewModel? oldValue, DocumentTabViewModel? newValue) =>
+        oldValue?.CommitActiveFreeTextEdit();
+
+    partial void OnSearchQueryChanged(string value)
+    {
+        if (!IsSearchBarVisible || ActiveTab is null) return;
+
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts = new CancellationTokenSource();
+        var token = _searchDebounceCts.Token;
+
+        _ = DebounceSearchAsync(token);
+    }
+
+    private async Task DebounceSearchAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(250, token);
+            if (!token.IsCancellationRequested && ActiveTab is not null)
+                await ActiveTab.SearchAsync(SearchQuery);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    // =========================================================
+    // 1. QUẢN LÝ TỆP & TAB (MỞ, LƯU, ĐÓNG CÓ CẢNH BÁO)
+    // =========================================================
+    [RelayCommand]
+    private void OpenFile()
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "Mở tài liệu PDF",
+            Filter = "PDF Files (*.pdf)|*.pdf|All Files (*.*)|*.*",
+            Multiselect = true
+        };
+
+        if (dialog.ShowDialog() == true)
+        {
+            foreach (var path in dialog.FileNames)
+                OpenDocumentFromPath(path);
+        }
+    }
+
+    public void OpenDocumentFromPath(string filePath)
+    {
+        if (!File.Exists(filePath)) return;
+
+        var existing = Tabs.FirstOrDefault(t =>
+            string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+        {
+            ActiveTab = existing;
+            return;
+        }
+
+        try
+        {
+            var newTab = new DocumentTabViewModel(filePath);
+            Tabs.Add(newTab);
+            ActiveTab = newTab;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Không thể mở tệp \"{Path.GetFileName(filePath)}\".\nChi tiết: {ex.Message}",
+                "Lỗi mở tệp PDF",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+        }
+    }
 
     [RelayCommand]
-    private void SaveCopy()
+    private async Task SaveDocumentAsync()
+    {
+        if (ActiveTab is null) return;
+        ActiveTab.CommitActiveFreeTextEdit();
+
+        if (!ActiveTab.IsDirty)
+        {
+            MessageBox.Show("Không có ghi chú hay thay đổi mới cần lưu.", "Lưu tài liệu", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            await ActiveTab.SavePendingAnnotationsAsync(_writerEngine);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Không thể lưu ghi chú vào tệp PDF.\nChi tiết: {ex.Message}", "Lỗi lưu tệp", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveCopyAsync()
     {
         if (ActiveTab is null || string.IsNullOrEmpty(ActiveTab.FilePath)) return;
+        ActiveTab.CommitActiveFreeTextEdit();
 
         var dialog = new SaveFileDialog
         {
@@ -31,7 +177,17 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            File.Copy(ActiveTab.FilePath, dialog.FileName, overwrite: true);
+            string sourcePath = ActiveTab.FilePath;
+            var pending = ActiveTab.GetPendingAnnotations();
+
+            await Task.Run(() =>
+            {
+                if (pending.Count > 0)
+                    _writerEngine.SaveAnnotations(sourcePath, dialog.FileName, pending);
+                else
+                    File.Copy(sourcePath, dialog.FileName, overwrite: true);
+            });
+
             MessageBox.Show("Đã lưu bản sao thành công.", "PdfStudio", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex)
@@ -40,6 +196,196 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private async Task CloseTabAsync(DocumentTabViewModel? tab)
+    {
+        if (tab is null) return;
+        if (!await EnsureTabSavedIfDirtyAsync(tab, "đóng tab này"))
+            return;
+
+        int index = Tabs.IndexOf(tab);
+        Tabs.Remove(tab);
+        tab.Dispose();
+
+        if (ActiveTab == tab)
+        {
+            ActiveTab = Tabs.Count > 0
+                ? Tabs[Math.Clamp(index - 1, 0, Tabs.Count - 1)]
+                : null;
+        }
+    }
+
+    public bool HasAnyDirtyTab()
+    {
+        foreach (var tab in Tabs)
+            tab.CommitActiveFreeTextEdit();
+        return Tabs.Any(t => t.IsDirty);
+    }
+
+    public async Task<bool> ConfirmSaveAllDirtyTabsAsync()
+    {
+        foreach (var tab in Tabs.ToList())
+        {
+            if (!await EnsureTabSavedIfDirtyAsync(tab, "thoát ứng dụng"))
+                return false;
+        }
+        return true;
+    }
+
+    private async Task<bool> EnsureTabSavedIfDirtyAsync(DocumentTabViewModel tab, string actionDescription)
+    {
+        tab.CommitActiveFreeTextEdit();
+        if (!tab.IsDirty) return true;
+
+        var choice = MessageBox.Show(
+            $"Tài liệu \"{tab.FileName}\" có ghi chú chưa được lưu.\nBạn có muốn lưu trước khi {actionDescription} không?",
+            "Chưa lưu thay đổi",
+            MessageBoxButton.YesNoCancel,
+            MessageBoxImage.Question);
+
+        if (choice == MessageBoxResult.Cancel) return false;
+
+        if (choice == MessageBoxResult.Yes)
+        {
+            try
+            {
+                await tab.SavePendingAnnotationsAsync(_writerEngine);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Không thể lưu \"{tab.FileName}\".\nChi tiết: {ex.Message}", "Lỗi lưu tệp", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public void DisposeAllTabs()
+    {
+        _searchDebounceCts?.Cancel();
+        _searchDebounceCts?.Dispose();
+
+        foreach (var tab in Tabs)
+            tab.Dispose();
+        Tabs.Clear();
+    }
+
+    // =========================================================
+    // 2. ĐIỀU HƯỚNG, ZOOM, TÌM KIẾM & IN ẤN
+    // =========================================================
+    [RelayCommand] private void ToggleLeftPane() => IsLeftPaneVisible = !IsLeftPaneVisible;
+    [RelayCommand] private void ToggleRightPane() => IsRightPaneVisible = !IsRightPaneVisible;
+    [RelayCommand] private void CopySelection() => ActiveTab?.CopySelectedText();
+    [RelayCommand] private void PrintDocument() => ActiveTab?.PrintDocument();
+
+    [RelayCommand]
+    private void ZoomIn()
+    {
+        if (ActiveTab is not null)
+            ActiveTab.ZoomPercent = Math.Min(400, ActiveTab.ZoomPercent + 15);
+    }
+
+    [RelayCommand]
+    private void ZoomOut()
+    {
+        if (ActiveTab is not null)
+            ActiveTab.ZoomPercent = Math.Max(25, ActiveTab.ZoomPercent - 15);
+    }
+
+    [RelayCommand]
+    private void SelectPage(PdfPageViewModel? page)
+    {
+        if (ActiveTab is not null && page is not null)
+            ActiveTab.NavigateToPage(page.PageIndex);
+    }
+
+    [RelayCommand]
+    private void OpenSearchBar()
+    {
+        if (ActiveTab is null) return;
+        IsSearchBarVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseSearchBar()
+    {
+        _searchDebounceCts?.Cancel();
+        IsSearchBarVisible = false;
+        SearchQuery = string.Empty;
+        ActiveTab?.ClearSearchHighlights();
+    }
+
+    [RelayCommand]
+    private async Task ExecuteSearchAsync()
+    {
+        if (ActiveTab is null) return;
+        _searchDebounceCts?.Cancel();
+        await ActiveTab.SearchAsync(SearchQuery);
+    }
+
+    [RelayCommand] private void FindNext() => ActiveTab?.NextSearchMatch();
+    [RelayCommand] private void FindPrevious() => ActiveTab?.PreviousSearchMatch();
+
+    // =========================================================
+    // 3. CÔNG CỤ GHI CHÚ, THUỘC TÍNH & UNDO / REDO
+    // =========================================================
+    [RelayCommand] private void SetHandTool() => ActiveTool = ViewerToolMode.Hand;
+    [RelayCommand] private void SetSelectTextTool() => ActiveTool = ViewerToolMode.SelectText;
+    [RelayCommand] private void SetSelectObjectTool() => ActiveTool = ViewerToolMode.SelectObject;
+
+    [RelayCommand]
+    private void SetHighlightTool()
+    {
+        ActiveTool = ViewerToolMode.Highlight;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#FACC15";
+    }
+
+    [RelayCommand]
+    private void SetUnderlineTool()
+    {
+        ActiveTool = ViewerToolMode.Underline;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#16A34A";
+    }
+
+    [RelayCommand]
+    private void SetStickyNoteTool()
+    {
+        ActiveTool = ViewerToolMode.StickyNote;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#F59E0B";
+    }
+
+    [RelayCommand]
+    private void SetFreeTextTool()
+    {
+        ActiveTool = ViewerToolMode.FreeText;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#111827";
+    }
+
+    [RelayCommand]
+    private void SetInkTool()
+    {
+        ActiveTool = ViewerToolMode.Ink;
+        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#B91C1C";
+    }
+
+    [RelayCommand]
+    private void SelectColor(string? hex)
+    {
+        if (ActiveTab is null || string.IsNullOrWhiteSpace(hex)) return;
+        ActiveTab.SelectedColorHex = hex;
+        if (ActiveTab.SelectedAnnotation is not null)
+            ActiveTab.ApplyPropertiesToSelectedAnnotation();
+    }
+
+    [RelayCommand] private void ApplyPropertiesToSelection() => ActiveTab?.ApplyPropertiesToSelectedAnnotation();
+    [RelayCommand] private void Undo() => ActiveTab?.UndoManager.Undo();
+    [RelayCommand] private void Redo() => ActiveTab?.UndoManager.Redo();
+    [RelayCommand] private void DeleteSelectedAnnotation() => ActiveTab?.DeleteSelectedAnnotation();
+
+    // =========================================================
+    // 4. TỔ CHỨC TRANG & BẢO MẬT (ITEXT / QPDF)
+    // =========================================================
     [RelayCommand]
     private async Task MergeFilesAsync()
     {
@@ -124,8 +470,9 @@ public partial class MainViewModel : ObservableObject
     private async Task RotateCurrentPageAsync()
     {
         if (ActiveTab is null) return;
-        int pageNum = ActiveTab.CurrentPage;
+        if (!await EnsureTabSavedIfDirtyAsync(ActiveTab, "xoay trang")) return;
 
+        int pageNum = ActiveTab.CurrentPage;
         try
         {
             await ActiveTab.ApplyInPlaceEditAsync(
@@ -147,6 +494,8 @@ public partial class MainViewModel : ObservableObject
             MessageBox.Show("Không thể xóa trang cuối cùng của tài liệu.", "Xóa trang", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
+
+        if (!await EnsureTabSavedIfDirtyAsync(ActiveTab, "xóa trang")) return;
 
         int pageNum = ActiveTab.CurrentPage;
         var confirm = MessageBox.Show(
@@ -268,267 +617,5 @@ public partial class MainViewModel : ObservableObject
             }
         }
         return result;
-    }
-    public ObservableCollection<DocumentTabViewModel> Tabs { get; } = [];
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(WindowTitle))]
-    [NotifyPropertyChangedFor(nameof(HasActiveTab))]
-    private DocumentTabViewModel? _activeTab;
-
-    [ObservableProperty] private bool _isLeftPaneVisible = true;
-    [ObservableProperty] private bool _isRightPaneVisible = true;
-
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsHandTool))]
-    [NotifyPropertyChangedFor(nameof(IsSelectTextTool))]
-    [NotifyPropertyChangedFor(nameof(IsSelectObjectTool))]
-    [NotifyPropertyChangedFor(nameof(IsEditTextMode))]
-    [NotifyPropertyChangedFor(nameof(IsHighlightTool))]
-    [NotifyPropertyChangedFor(nameof(IsUnderlineTool))]
-    [NotifyPropertyChangedFor(nameof(IsStickyNoteTool))]
-    [NotifyPropertyChangedFor(nameof(IsFreeTextTool))]
-    [NotifyPropertyChangedFor(nameof(IsInkTool))]
-    private ViewerToolMode _activeTool = ViewerToolMode.SelectText;
-    public bool IsSelectObjectTool => ActiveTool == ViewerToolMode.SelectObject;
-    public bool IsHighlightTool => ActiveTool == ViewerToolMode.Highlight;
-    public bool IsUnderlineTool => ActiveTool == ViewerToolMode.Underline;
-    public bool IsStickyNoteTool => ActiveTool == ViewerToolMode.StickyNote;
-    public bool IsFreeTextTool => ActiveTool == ViewerToolMode.FreeText;
-    public bool IsInkTool => ActiveTool == ViewerToolMode.Ink;
-
-    // Thanh Tìm kiếm nổi Ctrl+F
-    [ObservableProperty] private bool _isSearchBarVisible;
-    [ObservableProperty] private string _searchQuery = string.Empty;
-
-    public bool IsHandTool => ActiveTool == ViewerToolMode.Hand;
-    public bool IsSelectTextTool => ActiveTool == ViewerToolMode.SelectText;
-    public bool IsEditTextMode
-    {
-        get => ActiveTool == ViewerToolMode.EditText;
-        set => ActiveTool = value ? ViewerToolMode.EditText : ViewerToolMode.SelectText;
-    }
-
-    public string[] AvailableFonts { get; } = ["Arial", "Times New Roman", "Calibri", "Tahoma", "Segoe UI"];
-    public string[] AvailableFontSizes { get; } = ["10 pt", "11 pt", "12 pt", "14 pt", "16 pt", "18 pt", "24 pt"];
-
-    public bool HasActiveTab => ActiveTab is not null;
-
-    public string WindowTitle => ActiveTab is null
-        ? "PdfStudio (Nội bộ)"
-        : $"PdfStudio (Nội bộ) - {ActiveTab.FileName}";
-
-    [RelayCommand]
-    private void SetHandTool() => ActiveTool = ViewerToolMode.Hand;
-
-    [RelayCommand]
-    private void SetSelectTextTool() => ActiveTool = ViewerToolMode.SelectText;
-
-    [RelayCommand]
-    private void OpenSearchBar()
-    {
-        if (ActiveTab is null) return;
-        IsSearchBarVisible = true;
-    }
-
-    [RelayCommand]
-    private void CloseSearchBar()
-    {
-        IsSearchBarVisible = false;
-        SearchQuery = string.Empty;
-        ActiveTab?.ClearSearchHighlights();
-    }
-
-    [RelayCommand]
-    private async Task ExecuteSearchAsync()
-    {
-        if (ActiveTab is null) return;
-        await ActiveTab.SearchAsync(SearchQuery);
-    }
-
-    [RelayCommand]
-    private void FindNext() => ActiveTab?.NextSearchMatch();
-
-    [RelayCommand]
-    private void FindPrevious() => ActiveTab?.PreviousSearchMatch();
-
-    [RelayCommand]
-    private void CopySelection() => ActiveTab?.CopySelectedText();
-
-    [RelayCommand]
-    private void PrintDocument() => ActiveTab?.PrintDocument();
-
-    [RelayCommand]
-    private void OpenFile()
-    {
-        var dialog = new OpenFileDialog
-        {
-            Title = "Mở tài liệu PDF",
-            Filter = "PDF Files (*.pdf)|*.pdf|All Files (*.*)|*.*",
-            Multiselect = true
-        };
-
-        if (dialog.ShowDialog() == true)
-        {
-            foreach (var path in dialog.FileNames)
-                OpenDocumentFromPath(path);
-        }
-    }
-
-    public void OpenDocumentFromPath(string filePath)
-    {
-        if (!File.Exists(filePath)) return;
-
-        var existing = Tabs.FirstOrDefault(t =>
-            string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
-
-        if (existing is not null)
-        {
-            ActiveTab = existing;
-            return;
-        }
-
-        try
-        {
-            var newTab = new DocumentTabViewModel(filePath);
-            Tabs.Add(newTab);
-            ActiveTab = newTab;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                $"Không thể mở tệp \"{Path.GetFileName(filePath)}\".\nChi tiết: {ex.Message}",
-                "Lỗi mở tệp PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
-        }
-    }
-
-    [RelayCommand]
-    private void CloseTab(DocumentTabViewModel? tab)
-    {
-        if (tab is null) return;
-        int index = Tabs.IndexOf(tab);
-        Tabs.Remove(tab);
-        tab.Dispose();
-
-        if (ActiveTab == tab)
-        {
-            ActiveTab = Tabs.Count > 0
-                ? Tabs[Math.Clamp(index - 1, 0, Tabs.Count - 1)]
-                : null;
-        }
-    }
-
-    [RelayCommand]
-    private void ToggleLeftPane() => IsLeftPaneVisible = !IsLeftPaneVisible;
-
-    [RelayCommand]
-    private void ToggleRightPane() => IsRightPaneVisible = !IsRightPaneVisible;
-
-    [RelayCommand]
-    private void ZoomIn()
-    {
-        if (ActiveTab is not null)
-            ActiveTab.ZoomPercent = Math.Min(400, ActiveTab.ZoomPercent + 15);
-    }
-
-    [RelayCommand]
-    private void ZoomOut()
-    {
-        if (ActiveTab is not null)
-            ActiveTab.ZoomPercent = Math.Max(25, ActiveTab.ZoomPercent - 15);
-    }
-
-    [RelayCommand]
-    private void SelectPage(PdfPageViewModel? page)
-    {
-        if (ActiveTab is not null && page is not null)
-            ActiveTab.NavigateToPage(page.PageIndex);
-    }
-
-    public void DisposeAllTabs()
-    {
-        foreach (var tab in Tabs)
-            tab.Dispose();
-        Tabs.Clear();
-    }
-    [RelayCommand]
-    private void SetSelectObjectTool() => ActiveTool = ViewerToolMode.SelectObject;
-
-    [RelayCommand]
-    private void SetHighlightTool()
-    {
-        ActiveTool = ViewerToolMode.Highlight;
-        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#FACC15";
-    }
-
-    [RelayCommand]
-    private void SetUnderlineTool()
-    {
-        ActiveTool = ViewerToolMode.Underline;
-        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#16A34A";
-    }
-
-    [RelayCommand]
-    private void SetStickyNoteTool()
-    {
-        ActiveTool = ViewerToolMode.StickyNote;
-        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#F59E0B";
-    }
-
-    [RelayCommand]
-    private void SetFreeTextTool()
-    {
-        ActiveTool = ViewerToolMode.FreeText;
-        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#111827";
-    }
-
-    [RelayCommand]
-    private void SetInkTool()
-    {
-        ActiveTool = ViewerToolMode.Ink;
-        if (ActiveTab is not null) ActiveTab.SelectedColorHex = "#B91C1C";
-    }
-
-    [RelayCommand]
-    private void SelectColor(string? hex)
-    {
-        if (ActiveTab is null || string.IsNullOrWhiteSpace(hex)) return;
-        ActiveTab.SelectedColorHex = hex;
-        if (ActiveTab.SelectedAnnotation is not null)
-            ActiveTab.ApplyPropertiesToSelectedAnnotation();
-    }
-
-    [RelayCommand]
-    private void ApplyPropertiesToSelection() => ActiveTab?.ApplyPropertiesToSelectedAnnotation();
-
-    [RelayCommand]
-    private void Undo() => ActiveTab?.UndoManager.Undo();
-
-    [RelayCommand]
-    private void Redo() => ActiveTab?.UndoManager.Redo();
-
-    [RelayCommand]
-    private void DeleteSelectedAnnotation() => ActiveTab?.DeleteSelectedAnnotation();
-
-    [RelayCommand]
-    private async Task SaveDocumentAsync()
-    {
-        if (ActiveTab is null) return;
-        if (!ActiveTab.IsDirty)
-        {
-            MessageBox.Show("Không có ghi chú hay thay đổi mới cần lưu.", "Lưu tài liệu", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        try
-        {
-            await ActiveTab.SavePendingAnnotationsAsync(_writerEngine);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"Không thể lưu ghi chú vào tệp PDF.\nChi tiết: {ex.Message}", "Lỗi lưu tệp", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
     }
 }

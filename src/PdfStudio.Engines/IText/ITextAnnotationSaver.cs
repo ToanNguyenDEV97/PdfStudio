@@ -25,11 +25,10 @@ internal static class ITextAnnotationSaver
             return;
         }
 
-        var reader = new PdfReader(inputPath);
+        using var reader = new PdfReader(inputPath);
         reader.SetUnethicalReading(true);
 
         using var writer = new PdfWriter(outputPath);
-        // Incremental Update (AppendMode) giúp Ctrl+S cực nhanh và giữ nguyên cấu trúc gốc
         using var pdfDoc = new PdfDocument(reader, writer, new StampingProperties().UseAppendMode());
 
         foreach (var item in annotations)
@@ -70,7 +69,6 @@ internal static class ITextAnnotationSaver
             var pr = ToPdfRect(page, vr);
             pdfRects.Add(pr);
 
-            // Thứ tự 4 đỉnh QuadPoints theo PDF Spec: TopLeft, TopRight, BottomLeft, BottomRight
             var tl = ToPdfPoint(page, vr.X, vr.Y);
             var tr = ToPdfPoint(page, vr.X + vr.Width, vr.Y);
             var bl = ToPdfPoint(page, vr.X, vr.Y + vr.Height);
@@ -89,7 +87,6 @@ internal static class ITextAnnotationSaver
         dict.Put(new PdfName("CA"), new PdfNumber(isUnderline ? 1.0f : (float)Math.Clamp(item.Opacity, 0.15, 0.85)));
         dict.Put(PdfName.F, new PdfNumber(4));
 
-        // Sinh Normal Appearance Stream để MuPDF/Chrome hiển thị chuẩn màu & độ trong suốt
         var appearance = new PdfFormXObject(new Rectangle(0, 0, unionRect.GetWidth(), unionRect.GetHeight()));
         var canvas = new PdfCanvas(appearance, pdfDoc);
         canvas.SaveState();
@@ -98,11 +95,13 @@ internal static class ITextAnnotationSaver
         {
             canvas.SetStrokeColor(rgbColor);
             canvas.SetLineWidth((float)Math.Clamp(item.StrokeThickness, 1.0, 4.0));
-            foreach (var pr in pdfRects)
+            foreach (var vr in sourceRects)
             {
-                float lx = pr.GetLeft() - unionRect.GetLeft();
-                float ly = pr.GetBottom() - unionRect.GetBottom() + 1.0f;
-                canvas.MoveTo(lx, ly).LineTo(lx + pr.GetWidth(), ly).Stroke();
+                var pStart = ToPdfPoint(page, vr.X, vr.Y + vr.Height - 1.0);
+                var pEnd = ToPdfPoint(page, vr.X + vr.Width, vr.Y + vr.Height - 1.0);
+                canvas.MoveTo(pStart.X - unionRect.GetLeft(), pStart.Y - unionRect.GetBottom())
+                      .LineTo(pEnd.X - unionRect.GetLeft(), pEnd.Y - unionRect.GetBottom())
+                      .Stroke();
             }
         }
         else
@@ -129,7 +128,8 @@ internal static class ITextAnnotationSaver
     private static PdfAnnotation CreateStickyNoteAnnotation(PdfDocument pdfDoc, PdfPage page, PdfAnnotationModel item)
     {
         var (r, g, b) = ParseHexColor(item.ColorHex, (0.96f, 0.62f, 0.04f));
-        Rectangle pdfRect = ToPdfRect(page, new PdfRect(item.Bounds.X, item.Bounds.Y, 22, 22));
+        const float iconSize = 22f;
+        Rectangle pdfRect = ToPdfRect(page, new PdfRect(item.Bounds.X, item.Bounds.Y, iconSize, iconSize));
 
         var dict = new PdfDictionary();
         dict.Put(PdfName.Type, PdfName.Annot);
@@ -141,8 +141,7 @@ internal static class ITextAnnotationSaver
         dict.Put(PdfName.C, new PdfArray(new float[] { r, g, b }));
         dict.Put(PdfName.F, new PdfNumber(4));
 
-        // Vẽ biểu tượng ghi chú nổi sắc nét vào /AP
-        var appearance = new PdfFormXObject(new Rectangle(0, 0, 22, 22));
+        var appearance = new PdfFormXObject(new Rectangle(0, 0, iconSize, iconSize));
         var canvas = new PdfCanvas(appearance, pdfDoc);
         canvas.SaveState();
         canvas.SetFillColor(new DeviceRgb(r, g, b));
@@ -156,6 +155,8 @@ internal static class ITextAnnotationSaver
         canvas.MoveTo(5.5, 7).LineTo(12.5, 7).Stroke();
         canvas.RestoreState();
 
+        ApplyAppearanceRotation(appearance, page.GetRotation(), iconSize, iconSize);
+
         var annot = PdfAnnotation.MakeAnnotation(dict);
         annot.SetNormalAppearance(appearance.GetPdfObject());
         return annot;
@@ -167,9 +168,9 @@ internal static class ITextAnnotationSaver
         var rgbColor = new DeviceRgb(r, g, b);
         float fontSize = (float)Math.Clamp(item.FontSize, 6, 72);
 
-        double width = Math.Max(40, item.Bounds.Width);
-        double height = Math.Max(fontSize * 1.6, item.Bounds.Height);
-        Rectangle pdfRect = ToPdfRect(page, new PdfRect(item.Bounds.X, item.Bounds.Y, width, height));
+        float visualWidth = (float)Math.Max(40, item.Bounds.Width);
+        float visualHeight = (float)Math.Max(fontSize * 1.6, item.Bounds.Height);
+        Rectangle pdfRect = ToPdfRect(page, new PdfRect(item.Bounds.X, item.Bounds.Y, visualWidth, visualHeight));
 
         string daString = string.Format(
             CultureInfo.InvariantCulture,
@@ -184,9 +185,8 @@ internal static class ITextAnnotationSaver
         dict.Put(new PdfName("DA"), new PdfString(daString));
         dict.Put(PdfName.F, new PdfNumber(4));
 
-        // Nhúng font hệ thống Unicode để tiếng Việt có dấu hiển thị chuẩn trên mọi trình đọc
         PdfFont font = LoadVietnameseFont(item.FontName);
-        var appearance = new PdfFormXObject(new Rectangle(0, 0, pdfRect.GetWidth(), pdfRect.GetHeight()));
+        var appearance = new PdfFormXObject(new Rectangle(0, 0, visualWidth, visualHeight));
         using (var layoutCanvas = new Canvas(appearance, pdfDoc))
         {
             var paragraph = new Paragraph(item.TextContent)
@@ -198,6 +198,8 @@ internal static class ITextAnnotationSaver
                 .SetMultipliedLeading(1.15f);
             layoutCanvas.Add(paragraph);
         }
+
+        ApplyAppearanceRotation(appearance, page.GetRotation(), visualWidth, visualHeight);
 
         var annot = PdfAnnotation.MakeAnnotation(dict);
         annot.SetNormalAppearance(appearance.GetPdfObject());
@@ -261,8 +263,24 @@ internal static class ITextAnnotationSaver
     }
 
     // =========================================================
-    // HÀM QUY ĐỔI TỌA ĐỘ TOP-LEFT 72 DPI -> PDF USER SPACE
+    // QUY ĐỔI TỌA ĐỘ TOP-LEFT 72 DPI <-> PDF USER SPACE
     // =========================================================
+    private static void ApplyAppearanceRotation(PdfFormXObject appearance, int pageRotation, float vw, float vh)
+    {
+        int rot = ((pageRotation % 360) + 360) % 360;
+        if (rot == 0) return;
+
+        float[] matrix = rot switch
+        {
+            90 => [0, 1, -1, 0, vh, 0],
+            180 => [-1, 0, 0, -1, vw, vh],
+            270 => [0, -1, 1, 0, 0, vw],
+            _ => [1, 0, 0, 1, 0, 0]
+        };
+
+        appearance.GetPdfObject().Put(PdfName.Matrix, new PdfArray(matrix));
+    }
+
     private static (float X, float Y) ToPdfPoint(PdfPage page, double vx, double vy)
     {
         Rectangle crop = page.GetCropBox();
@@ -306,13 +324,13 @@ internal static class ITextAnnotationSaver
     }
 
     private static PdfArray ToPdfArray(Rectangle r) =>
-    new PdfArray(new float[] { r.GetLeft(), r.GetBottom(), r.GetRight(), r.GetTop() });
+        new PdfArray(new float[] { r.GetLeft(), r.GetBottom(), r.GetRight(), r.GetTop() });
 
     private static (float R, float G, float B) ParseHexColor(string hex, (float, float, float) fallback)
     {
         if (string.IsNullOrWhiteSpace(hex)) return fallback;
         string clean = hex.Trim().TrimStart('#');
-        if (clean.Length == 8) clean = clean[2..]; // Bỏ kênh alpha nếu có dạng #AARRGGBB
+        if (clean.Length == 8) clean = clean[2..];
         if (clean.Length != 6) return fallback;
 
         if (byte.TryParse(clean[0..2], NumberStyles.HexNumber, null, out byte r)

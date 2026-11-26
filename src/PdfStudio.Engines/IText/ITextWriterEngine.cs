@@ -2,8 +2,8 @@ using System.Text;
 using iText.Kernel.Pdf;
 using iText.Kernel.Utils;
 using PdfStudio.Core.Interfaces;
-using PdfStudio.Engines.QPdf;
 using PdfStudio.Core.Models;
+using PdfStudio.Engines.QPdf;
 
 namespace PdfStudio.Engines.IText;
 
@@ -15,6 +15,9 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
     {
         if (inputPaths.Count < 2)
             throw new ArgumentException("Cần chọn ít nhất 2 tệp PDF để gộp.");
+
+        foreach (string path in inputPaths)
+            EnsureDistinctPaths(path, outputPath);
 
         var writerProps = new WriterProperties().SetFullCompressionMode(true);
         using var writer = new PdfWriter(outputPath, writerProps);
@@ -31,6 +34,8 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
 
     public void ExtractPages(string inputPath, string outputPath, IReadOnlyList<int> oneBasedPageNumbers)
     {
+        EnsureDistinctPaths(inputPath, outputPath);
+
         if (oneBasedPageNumbers.Count == 0)
             throw new ArgumentException("Danh sách trang cần tách không được rỗng.");
 
@@ -52,6 +57,8 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
 
     public void RotatePage(string inputPath, string outputPath, int oneBasedPageNumber, int clockwiseDegrees = 90)
     {
+        EnsureDistinctPaths(inputPath, outputPath);
+
         using var reader = CreateReader(inputPath);
         using var writer = new PdfWriter(outputPath);
         using var pdfDoc = new PdfDocument(reader, writer);
@@ -60,13 +67,14 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
             throw new ArgumentOutOfRangeException(nameof(oneBasedPageNumber));
 
         PdfPage page = pdfDoc.GetPage(oneBasedPageNumber);
-        int nextRotation = (page.GetRotation() + clockwiseDegrees) % 360;
-        if (nextRotation < 0) nextRotation += 360;
+        int nextRotation = ((page.GetRotation() + clockwiseDegrees) % 360 + 360) % 360;
         page.SetRotation(nextRotation);
     }
 
     public void DeletePage(string inputPath, string outputPath, int oneBasedPageNumber)
     {
+        EnsureDistinctPaths(inputPath, outputPath);
+
         using var reader = CreateReader(inputPath);
         using var writer = new PdfWriter(outputPath);
         using var pdfDoc = new PdfDocument(reader, writer);
@@ -83,7 +91,8 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
 
     public void CompressFile(string inputPath, string outputPath)
     {
-        // Ưu tiên qpdf.exe nếu có sẵn trong Tools/, ngược lại nén bằng iText SmartMode
+        EnsureDistinctPaths(inputPath, outputPath);
+
         if (_qpdf.TryCompress(inputPath, outputPath))
             return;
 
@@ -105,6 +114,8 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         bool allowPrint = true,
         bool allowCopy = true)
     {
+        EnsureDistinctPaths(inputPath, outputPath);
+
         if (string.IsNullOrEmpty(userPassword))
             throw new ArgumentException("Mật khẩu mở tệp không được để trống.");
 
@@ -124,12 +135,22 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         using var pdfDoc = new PdfDocument(reader, writer);
     }
 
+    public void SaveAnnotations(string inputPath, string outputPath, IReadOnlyList<PdfAnnotationModel> annotations)
+    {
+        EnsureDistinctPaths(inputPath, outputPath);
+        ITextAnnotationSaver.Save(inputPath, outputPath, annotations);
+    }
+
     private static PdfReader CreateReader(string path)
     {
         var reader = new PdfReader(path);
         reader.SetUnethicalReading(true);
         return reader;
     }
-    public void SaveAnnotations(string inputPath, string outputPath, IReadOnlyList<PdfAnnotationModel> annotations) =>
-        ITextAnnotationSaver.Save(inputPath, outputPath, annotations);
+
+    private static void EnsureDistinctPaths(string inputPath, string outputPath)
+    {
+        if (string.Equals(Path.GetFullPath(inputPath), Path.GetFullPath(outputPath), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Tệp đích không được trùng với tệp PDF gốc đang đọc. Vui lòng chọn tên tệp khác.");
+    }
 }

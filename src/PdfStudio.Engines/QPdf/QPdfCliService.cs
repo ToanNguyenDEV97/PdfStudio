@@ -37,8 +37,16 @@ public sealed class QPdfCliService
         using var proc = Process.Start(startInfo);
         if (proc is null) return false;
 
-        proc.WaitForExit(60_000);
-        // qpdf trả mã 0 (thành công) hoặc 3 (thành công kèm cảnh báo nhẹ về cấu trúc gốc)
+        // Xả StandardError song song để tránh đầy buffer gây treo WaitForExit
+        _ = proc.StandardError.ReadToEndAsync();
+
+        if (!proc.WaitForExit(60_000))
+        {
+            try { proc.Kill(entireProcessTree: true); } catch { }
+            return false;
+        }
+
+        // qpdf trả mã 0 (thành công) hoặc 3 (thành công kèm cảnh báo nhẹ)
         return (proc.ExitCode == 0 || proc.ExitCode == 3) && File.Exists(outputPath);
     }
 }

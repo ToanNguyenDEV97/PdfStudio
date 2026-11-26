@@ -203,13 +203,31 @@
                                                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                             </Border>
 
-                                                            <!-- 4. Thêm chữ (FreeText) -->
+                                                            <!-- 4. Thêm chữ (FreeText) - Hiển thị & Nhập trực tiếp -->
                                                             <TextBlock Text="{Binding TextContent}"
-                                                                       FontFamily="{Binding FontName}"
-                                                                       FontSize="{Binding FontSize}"
-                                                                       Foreground="{Binding AccentBrush}"
-                                                                       TextWrapping="Wrap" Padding="2"
-                                                                       Visibility="{Binding IsFreeText, Converter={StaticResource BoolToVis}}" />
+                                                                    FontFamily="{Binding FontName}"
+                                                                    FontSize="{Binding FontSize}"
+                                                                    Foreground="{Binding AccentBrush}"
+                                                                    TextWrapping="Wrap" Padding="2"
+                                                                    Visibility="{Binding IsFreeTextDisplay, Converter={StaticResource BoolToVis}}" />
+
+                                                            <TextBox Style="{x:Null}"
+                                                                    Text="{Binding TextContent, UpdateSourceTrigger=PropertyChanged}"
+                                                                    FontFamily="{Binding FontName}"
+                                                                    FontSize="{Binding FontSize}"
+                                                                    Foreground="{Binding AccentBrush}"
+                                                                    CaretBrush="{Binding AccentBrush}"
+                                                                    Background="#F2FFFFFF"
+                                                                    BorderBrush="#B91C1C"
+                                                                    BorderThickness="1"
+                                                                    Padding="2"
+                                                                    AcceptsReturn="True"
+                                                                    TextWrapping="Wrap"
+                                                                    VerticalContentAlignment="Top"
+                                                                    Visibility="{Binding IsFreeTextEditing, Converter={StaticResource BoolToVis}}"
+                                                                    IsVisibleChanged="InlineFreeTextBox_IsVisibleChanged"
+                                                                    LostKeyboardFocus="InlineFreeTextBox_LostKeyboardFocus"
+                                                                    PreviewKeyDown="InlineFreeTextBox_PreviewKeyDown" />
 
                                                             <!-- 5. Vẽ tự do (Ink) -->
                                                             <Polyline Points="{Binding LocalInkPoints}"

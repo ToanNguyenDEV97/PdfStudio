@@ -153,6 +153,8 @@ public partial class PdfViewportControl : UserControl
         if (sender is not Canvas canvas || canvas.Tag is not int pageIndex) return;
 
         Point pt = e.GetPosition(canvas);
+        if (_currentTab.CommitActiveFreeTextEdit())
+            return;
         _currentTab.ClearSelection();
         _currentTab.SelectAnnotation(null);
 
@@ -196,27 +198,7 @@ public partial class PdfViewportControl : UserControl
             }
             case ViewerToolMode.FreeText:
             {
-                var prompt = new PromptDialog("Thêm chữ (FreeText)", "Nhập nội dung văn bản muốn chèn:")
-                {
-                    Owner = Window.GetWindow(this)
-                };
-                if (prompt.ShowDialog() == true && !string.IsNullOrWhiteSpace(prompt.InputValue))
-                {
-                    double fontSize = DocumentTabViewModel.ParseFontSize(_currentTab.SelectedFontSize, 13);
-                    double estWidth = Math.Clamp(prompt.InputValue.Length * fontSize * 0.62 + 16, 90, 420);
-                    double estHeight = fontSize * 1.7 + 8;
-
-                    _currentTab.AddAnnotation(new PdfAnnotationModel
-                    {
-                        PageIndex = pageIndex,
-                        Type = AnnotationType.FreeText,
-                        Bounds = new PdfRect(pt.X, pt.Y - fontSize * 0.5, estWidth, estHeight),
-                        TextContent = prompt.InputValue,
-                        ColorHex = _currentTab.SelectedColorHex,
-                        FontName = _currentTab.SelectedFont,
-                        FontSize = fontSize
-                    });
-                }
+                _currentTab.BeginNewFreeText(pageIndex, pt.X, pt.Y);
                 break;
             }
             case ViewerToolMode.Ink:
@@ -359,23 +341,30 @@ public partial class PdfViewportControl : UserControl
     {
         if (_currentTab is null || IsHandModeActive()) return;
         if (sender is not FrameworkElement el || el.DataContext is not AnnotationItemViewModel annot) return;
+        if (annot.IsEditing) return;
 
         _currentTab.SelectAnnotation(annot);
         e.Handled = true;
 
         // Nháy đúp để sửa chữ của Sticky Note hoặc FreeText
-        if (e.ClickCount == 2 && (annot.IsStickyNote || annot.IsFreeText))
+        if (e.ClickCount == 2)
         {
-            var prompt = new PromptDialog(
-                annot.IsStickyNote ? "Sửa nội dung Sticky Note" : "Sửa văn bản FreeText",
-                "Cập nhật nội dung:",
-                annot.TextContent)
+            if (annot.IsFreeText)
             {
-                Owner = Window.GetWindow(this)
-            };
-            if (prompt.ShowDialog() == true && !string.IsNullOrWhiteSpace(prompt.InputValue))
-                _currentTab.UpdateAnnotationText(annot, prompt.InputValue);
-            return;
+                _currentTab.BeginEditFreeText(annot);
+                return;
+            }
+
+            if (annot.IsStickyNote)
+            {
+                var prompt = new PromptDialog("Sửa nội dung Sticky Note", "Cập nhật nội dung:", annot.TextContent)
+                {
+                    Owner = Window.GetWindow(this)
+                };
+                if (prompt.ShowDialog() == true && !string.IsNullOrWhiteSpace(prompt.InputValue))
+                    _currentTab.UpdateAnnotationText(annot, prompt.InputValue);
+                return;
+            }
         }
 
         // Cho phép kéo di chuyển đối tượng
@@ -410,6 +399,40 @@ public partial class PdfViewportControl : UserControl
         _currentTab?.RecordAnnotationMove(_draggingAnnotation, _dragOrigX, _dragOrigY, _draggingAnnotation.X, _draggingAnnotation.Y);
         _draggingAnnotation = null;
         _draggingPageCanvas = null;
+    }
+    private void InlineFreeTextBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is TextBox tb && tb.IsVisible)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                tb.Focus();
+                Keyboard.Focus(tb);
+                tb.CaretIndex = tb.Text.Length;
+            }, System.Windows.Threading.DispatcherPriority.Input);
+        }
+    }
+
+    private void InlineFreeTextBox_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox tb && tb.DataContext is AnnotationItemViewModel annot)
+            _currentTab?.CommitFreeTextEdit(annot, cancel: false);
+    }
+
+    private void InlineFreeTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox tb || tb.DataContext is not AnnotationItemViewModel annot) return;
+
+        if (e.Key == Key.Escape)
+        {
+            _currentTab?.CommitFreeTextEdit(annot, cancel: true);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            _currentTab?.CommitFreeTextEdit(annot, cancel: false);
+            e.Handled = true;
+        }
     }
 
     private static Canvas? FindAncestorPageCanvas(DependencyObject child)

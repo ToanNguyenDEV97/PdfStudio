@@ -24,16 +24,25 @@ public partial class AnnotationItemViewModel : ObservableObject
     [ObservableProperty] private double _fontSize;
     [ObservableProperty] private bool _isSelected;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsFreeTextDisplay))]
+    [NotifyPropertyChangedFor(nameof(IsFreeTextEditing))]
+    private bool _isEditing;
+
+    public bool IsNewDraft { get; set; }
+    public string OriginalTextBeforeEdit { get; set; } = string.Empty;
+
     public bool IsHighlight => Type == AnnotationType.Highlight;
     public bool IsUnderline => Type == AnnotationType.Underline;
     public bool IsStickyNote => Type == AnnotationType.StickyNote;
     public bool IsFreeText => Type == AnnotationType.FreeText;
+    public bool IsFreeTextDisplay => IsFreeText && !IsEditing;
+    public bool IsFreeTextEditing => IsFreeText && IsEditing;
     public bool IsInk => Type == AnnotationType.Ink;
 
     public Brush AccentBrush => CreateBrush(ColorHex, 1.0);
     public Brush HighlightFillBrush => CreateBrush(ColorHex, Model.Opacity);
 
-    // Tọa độ cục bộ (tính từ góc trên-trái của chính đối tượng) để Canvas vẽ chính xác
     public List<HighlightBoxItem> LocalQuadRects { get; private set; } = [];
     public PointCollection LocalInkPoints { get; private set; } = [];
 
@@ -71,13 +80,19 @@ public partial class AnnotationItemViewModel : ObservableObject
 
     partial void OnTextContentChanged(string value)
     {
-        Model.TextContent = value;
+        string safe = value ?? string.Empty;
+        Model.TextContent = safe;
+
         if (IsFreeText)
         {
-            var lines = value.Split('\n');
-            int maxChars = Math.Max(6, lines.Max(l => l.Length));
-            Width = Math.Max(90, Math.Min(420, maxChars * FontSize * 0.62 + 16));
-            Height = Math.Max(FontSize * 1.7, lines.Length * FontSize * 1.35 + 10);
+            var lines = safe.Replace("\r\n", "\n").Split('\n');
+            int maxChars = Math.Max(8, lines.Max(l => l.Length));
+            Width = Math.Max(110, Math.Min(460, maxChars * FontSize * 0.65 + 24));
+
+            int charsPerLine = Math.Max(10, (int)((Width - 16) / (FontSize * 0.60)));
+            int visualLines = lines.Sum(l => Math.Max(1, (int)Math.Ceiling((double)Math.Max(1, l.Length) / charsPerLine)));
+            Height = Math.Max(FontSize * 1.8 + 8, visualLines * FontSize * 1.42 + 12);
+
             Model.Bounds = new PdfRect(X, Y, Width, Height);
         }
     }
