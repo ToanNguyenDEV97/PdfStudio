@@ -7,6 +7,7 @@ using PdfStudio.App.ViewModels;
 using PdfStudio.Core.Models;
 using PdfStudio.App.Views;
 using System.Windows.Shapes;
+using PdfStudio.App.Services;
 
 namespace PdfStudio.App.Controls;
 
@@ -69,7 +70,10 @@ public partial class PdfViewportControl : UserControl
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         if (_currentTab is not null)
+        {
             _currentTab.ScrollToPageRequested -= OnScrollToPageRequested;
+            _currentTab.FitModeRequested -= OnFitModeRequested;
+        }
 
         _currentTab = e.NewValue as DocumentTabViewModel;
 
@@ -77,6 +81,7 @@ public partial class PdfViewportControl : UserControl
         {
             _currentTab.UpdateDpiScale(VisualTreeHelper.GetDpi(this).DpiScaleX);
             _currentTab.ScrollToPageRequested += OnScrollToPageRequested;
+            _currentTab.FitModeRequested += OnFitModeRequested;
             MainScrollViewer.ScrollToVerticalOffset(0);
             Dispatcher.InvokeAsync(TriggerVisibleRender);
         }
@@ -92,6 +97,30 @@ public partial class PdfViewportControl : UserControl
             yOffset += _currentTab.Pages[i].DisplayHeight + PageSpacing;
 
         MainScrollViewer.ScrollToVerticalOffset(yOffset);
+    }
+
+    private void OnFitModeRequested(ZoomFitMode mode)
+    {
+        if (_currentTab is null || _currentTab.Pages.Count == 0) return;
+
+        int pageIndex = Math.Clamp(_currentTab.CurrentPage - 1, 0, _currentTab.Pages.Count - 1);
+        var page = _currentTab.Pages[pageIndex];
+        if (page.WidthPoints <= 0 || page.HeightPoints <= 0) return;
+
+        double viewportW = MainScrollViewer.ViewportWidth > 0 ? MainScrollViewer.ViewportWidth : MainScrollViewer.ActualWidth;
+        double viewportH = MainScrollViewer.ViewportHeight > 0 ? MainScrollViewer.ViewportHeight : MainScrollViewer.ActualHeight;
+
+        double availWidth = Math.Max(200, viewportW - 64);
+        double availHeight = Math.Max(200, viewportH - 52);
+
+        double zoomW = (availWidth / (page.WidthPoints * PdfPageViewModel.DipPerPoint)) * 100.0;
+        double zoomH = (availHeight / (page.HeightPoints * PdfPageViewModel.DipPerPoint)) * 100.0;
+
+        double targetZoom = mode == ZoomFitMode.FitWidth ? zoomW : Math.Min(zoomW, zoomH);
+        _currentTab.ZoomPercent = Math.Clamp(Math.Round(targetZoom), 25, 400);
+
+        if (mode == ZoomFitMode.FitPage)
+            Dispatcher.InvokeAsync(() => OnScrollToPageRequested(pageIndex));
     }
 
     private void MainScrollViewer_ScrollChanged(object sender, ScrollChangedEventArgs e) =>
@@ -179,18 +208,15 @@ public partial class PdfViewportControl : UserControl
             }
             case ViewerToolMode.StickyNote:
             {
-                var prompt = new PromptDialog("Thêm Sticky Note", "Nhập nội dung ghi chú:")
-                {
-                    Owner = Window.GetWindow(this)
-                };
-                if (prompt.ShowDialog() == true && !string.IsNullOrWhiteSpace(prompt.InputValue))
+                string? note = AppDialog.Prompt("Thêm Sticky Note", "Nhập nội dung ghi chú:");
+                if (!string.IsNullOrWhiteSpace(note))
                 {
                     _currentTab.AddAnnotation(new PdfAnnotationModel
                     {
                         PageIndex = pageIndex,
                         Type = AnnotationType.StickyNote,
                         Bounds = new PdfRect(pt.X - 11, pt.Y - 11, 22, 22),
-                        TextContent = prompt.InputValue,
+                        TextContent = note,
                         ColorHex = _currentTab.SelectedColorHex
                     });
                 }
@@ -357,12 +383,9 @@ public partial class PdfViewportControl : UserControl
 
             if (annot.IsStickyNote)
             {
-                var prompt = new PromptDialog("Sửa nội dung Sticky Note", "Cập nhật nội dung:", annot.TextContent)
-                {
-                    Owner = Window.GetWindow(this)
-                };
-                if (prompt.ShowDialog() == true && !string.IsNullOrWhiteSpace(prompt.InputValue))
-                    _currentTab.UpdateAnnotationText(annot, prompt.InputValue);
+                string? updated = AppDialog.Prompt("Sửa nội dung Sticky Note", "Cập nhật nội dung:", annot.TextContent);
+                if (!string.IsNullOrWhiteSpace(updated))
+                    _currentTab.UpdateAnnotationText(annot, updated);
                 return;
             }
         }

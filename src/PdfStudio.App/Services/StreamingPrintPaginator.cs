@@ -12,25 +12,29 @@ public sealed class StreamingPrintPaginator : DocumentPaginator
 {
     private const double PrintDpi = 200.0;
     private readonly IPdfReaderEngine _readerEngine;
-    private readonly int _fromPageIndex;
-    private readonly int _pageCount;
+    private readonly IReadOnlyList<int> _pageIndices;
+    private readonly bool _fitToPage;
+    private readonly bool _isGrayscale;
     private Size _pageSize;
 
     public StreamingPrintPaginator(
         IPdfReaderEngine readerEngine,
         Size printableAreaSize,
-        int fromPageIndex,
-        int toPageIndex)
+        IReadOnlyList<int> zeroBasedPageIndices,
+        bool fitToPage = true,
+        bool isGrayscale = false)
     {
         _readerEngine = readerEngine;
         _pageSize = printableAreaSize;
-        _fromPageIndex = Math.Clamp(fromPageIndex, 0, Math.Max(0, readerEngine.PageCount - 1));
-        int safeTo = Math.Clamp(toPageIndex, _fromPageIndex, Math.Max(0, readerEngine.PageCount - 1));
-        _pageCount = readerEngine.PageCount == 0 ? 0 : (safeTo - _fromPageIndex + 1);
+        _fitToPage = fitToPage;
+        _isGrayscale = isGrayscale;
+        _pageIndices = zeroBasedPageIndices
+            .Where(i => i >= 0 && i < readerEngine.PageCount)
+            .ToList();
     }
 
     public override bool IsPageCountValid => true;
-    public override int PageCount => _pageCount;
+    public override int PageCount => _pageIndices.Count;
     public override IDocumentPaginatorSource? Source => null;
 
     public override Size PageSize
@@ -41,26 +45,37 @@ public sealed class StreamingPrintPaginator : DocumentPaginator
 
     public override DocumentPage GetPage(int pageNumber)
     {
-        int actualPageIndex = _fromPageIndex + pageNumber;
+        int actualPageIndex = _pageIndices[pageNumber];
         double renderScale = PrintDpi / 72.0;
 
         RenderedPageResult raw = _readerEngine.RenderPage(actualPageIndex, renderScale);
-        var bitmap = BitmapSource.Create(
+        BitmapSource bitmap = BitmapSource.Create(
             raw.Width, raw.Height, PrintDpi, PrintDpi,
             PixelFormats.Bgra32, null, raw.BgraPixels, raw.Stride);
-        bitmap.Freeze();
+
+        if (_isGrayscale)
+        {
+            var gray = new FormatConvertedBitmap(bitmap, PixelFormats.Gray8, null, 0);
+            gray.Freeze();
+            bitmap = gray;
+        }
+        else
+        {
+            bitmap.Freeze();
+        }
 
         var container = new Grid
         {
             Width = _pageSize.Width,
             Height = _pageSize.Height,
-            Background = Brushes.White
+            Background = Brushes.White,
+            ClipToBounds = true
         };
 
         var image = new Image
         {
             Source = bitmap,
-            Stretch = Stretch.Uniform,
+            Stretch = _fitToPage ? Stretch.Uniform : Stretch.None,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center
         };

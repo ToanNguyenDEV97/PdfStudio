@@ -25,6 +25,32 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <Style x:Key="RecentFileRowButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="7" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverSubtleBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#E2E5EC" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
     <Window.InputBindings>
@@ -37,6 +63,12 @@
         <KeyBinding Modifiers="Control" Key="Z" Command="{Binding UndoCommand}" />
         <KeyBinding Modifiers="Control" Key="Y" Command="{Binding RedoCommand}" />
         <KeyBinding Key="Delete" Command="{Binding DeleteSelectedAnnotationCommand}" />
+        <KeyBinding Modifiers="Control" Key="D0" Command="{Binding FitPageCommand}" />
+        <KeyBinding Modifiers="Control" Key="NumPad0" Command="{Binding FitPageCommand}" />
+        <KeyBinding Modifiers="Control" Key="D1" Command="{Binding ResetZoomCommand}" />
+        <KeyBinding Modifiers="Control" Key="NumPad1" Command="{Binding ResetZoomCommand}" />
+        <KeyBinding Modifiers="Control" Key="D2" Command="{Binding FitWidthCommand}" />
+        <KeyBinding Modifiers="Control" Key="NumPad2" Command="{Binding FitWidthCommand}" />
     </Window.InputBindings>
 
     <Border x:Name="RootBorder" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
@@ -96,12 +128,13 @@
             <views:RibbonBarView DockPanel.Dock="Top" />
 
             <!-- VÙNG 5: THANH TRẠNG THÁI -->
+            <!-- VÙNG 5: THANH TRẠNG THÁI -->
             <Border DockPanel.Dock="Bottom"
                     Height="34"
                     Background="{StaticResource SurfaceWhiteBrush}"
                     BorderBrush="{StaticResource BorderSubtleBrush}"
                     BorderThickness="0,1,0,0"
-                    Padding="14,0">
+                    Padding="10,0">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
@@ -109,27 +142,67 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
+                    <!-- Điều hướng trang & Nhập số trang nhảy nhanh -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Trang " Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Text="{Binding ActiveTab.CurrentPage, FallbackValue=0}" FontWeight="SemiBold" />
-                        <TextBlock Text=" / " Foreground="{StaticResource TextSecondaryBrush}" />
-                        <TextBlock Text="{Binding ActiveTab.TotalPages, FallbackValue=0}" />
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding PreviousPageCommand}"
+                                MinWidth="26" MinHeight="24" Padding="4" ToolTip="Trang trước">
+                            <iconPacks:PackIconMaterial Kind="ChevronLeft" Width="15" Height="15" />
+                        </Button>
+
+                        <TextBlock Text="Trang" Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" Margin="6,0,5,0" />
+
+                        <TextBox x:Name="PageJumpTextBox"
+                                 Width="44" Height="24"
+                                 Padding="2,0"
+                                 TextAlignment="Center"
+                                 FontWeight="SemiBold"
+                                 IsEnabled="{Binding HasActiveTab}"
+                                 Text="{Binding ActiveTab.CurrentPage, Mode=OneWay, FallbackValue=0}"
+                                 GotKeyboardFocus="PageJumpTextBox_GotKeyboardFocus"
+                                 KeyDown="PageJumpTextBox_KeyDown"
+                                 LostFocus="PageJumpTextBox_LostFocus" />
+
+                        <TextBlock Text=" / " Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding ActiveTab.TotalPages, FallbackValue=0}"
+                                   VerticalAlignment="Center" Margin="0,0,6,0" />
+
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding NextPageCommand}"
+                                MinWidth="26" MinHeight="24" Padding="4" ToolTip="Trang sau">
+                            <iconPacks:PackIconMaterial Kind="ChevronRight" Width="15" Height="15" />
+                        </Button>
                     </StackPanel>
 
+                    <!-- Fit Width / Fit Page & Thanh trượt Zoom -->
                     <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ZoomOutCommand}" ToolTip="Thu nhỏ">
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding FitWidthCommand}"
+                                MinWidth="28" MinHeight="24" Padding="4" ToolTip="Vừa chiều rộng (Ctrl+2)">
+                            <iconPacks:PackIconMaterial Kind="ArrowExpandHorizontal" Width="15" Height="15" />
+                        </Button>
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding FitPageCommand}"
+                                MinWidth="28" MinHeight="24" Padding="4" ToolTip="Vừa trọn trang (Ctrl+0)">
+                            <iconPacks:PackIconMaterial Kind="Fullscreen" Width="15" Height="15" />
+                        </Button>
+
+                        <Border Width="1" Height="14" Background="{StaticResource BorderSubtleBrush}" Margin="8,0" />
+
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ZoomOutCommand}"
+                                MinWidth="26" MinHeight="24" Padding="4" ToolTip="Thu nhỏ">
                             <iconPacks:PackIconMaterial Kind="MagnifyMinus" Width="15" Height="15" />
                         </Button>
                         <Slider Width="116" Minimum="25" Maximum="400" Margin="6,0"
                                 Value="{Binding ActiveTab.ZoomPercent, FallbackValue=100}" />
-                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ZoomInCommand}" ToolTip="Phóng to">
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ZoomInCommand}"
+                                MinWidth="26" MinHeight="24" Padding="4" ToolTip="Phóng to">
                             <iconPacks:PackIconMaterial Kind="MagnifyPlus" Width="15" Height="15" />
                         </Button>
-                        <TextBlock Text="{Binding ActiveTab.ZoomPercent, StringFormat={}{0:0}%, FallbackValue=100%}"
-                                   Width="46" TextAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold" />
-                        <Border Width="1" Height="14" Background="{StaticResource BorderSubtleBrush}" Margin="12,0" />
-                        <TextBlock Text="{Binding ActiveTab.ViewModeText, FallbackValue='1 trang / Liên tục'}"
-                                   VerticalAlignment="Center" Foreground="{StaticResource TextSecondaryBrush}" />
+
+                        <Button Style="{StaticResource FlatIconButtonStyle}" Command="{Binding ResetZoomCommand}"
+                                MinWidth="48" MinHeight="24" Padding="4,2" Margin="2,0,0,0"
+                                ToolTip="Nhấn để đặt lại 100% (Ctrl+1)">
+                            <TextBlock Text="{Binding ActiveTab.ZoomPercent, StringFormat={}{0:0}%, FallbackValue=100%}"
+                                       FontWeight="SemiBold" />
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -214,7 +287,7 @@
                                                      DataContext="{Binding ActiveTab}"
                                                      Visibility="{Binding DataContext.HasActiveTab, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVis}}" />
 
-                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Margin="20">
                             <StackPanel.Style>
                                 <Style TargetType="StackPanel">
                                     <Setter Property="Visibility" Value="Visible" />
@@ -234,12 +307,109 @@
                                                             Foreground="{StaticResource AccentCrimsonBrush}"
                                                             HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
+
                             <TextBlock Text="Chưa có tài liệu PDF nào đang mở" FontSize="16" FontWeight="SemiBold"
                                        HorizontalAlignment="Center" Margin="0,0,0,6" />
                             <TextBlock Text="Kéo thả tệp .pdf vào cửa sổ này hoặc nhấn Ctrl+O để bắt đầu"
                                        Foreground="{StaticResource TextSecondaryBrush}" HorizontalAlignment="Center" Margin="0,0,0,18" />
                             <Button Content="Mở tệp PDF..." Style="{StaticResource PrimaryCrimsonButtonStyle}"
                                     Command="{Binding OpenFileCommand}" HorizontalAlignment="Center" Width="150" />
+
+                            <!-- Thẻ danh sách Tệp mở gần đây -->
+                            <Border Width="520"
+                                    Margin="0,24,0,0"
+                                    Background="{StaticResource SurfaceWhiteBrush}"
+                                    BorderBrush="{StaticResource BorderSubtleBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="12"
+                                    Visibility="{Binding HasRecentFiles, Converter={StaticResource BoolToVis}}">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#111827" Opacity="0.07" BlurRadius="16" ShadowDepth="3" />
+                                </Border.Effect>
+
+                                <StackPanel>
+                                    <Border Padding="16,11,12,11"
+                                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                                            BorderThickness="0,0,0,1">
+                                        <DockPanel>
+                                            <Button DockPanel.Dock="Right"
+                                                    Style="{StaticResource FlatIconButtonStyle}"
+                                                    MinHeight="24" Padding="8,3"
+                                                    Command="{Binding ClearRecentFilesCommand}"
+                                                    ToolTip="Xóa toàn bộ lịch sử mở tệp">
+                                                <TextBlock Text="Xóa tất cả" FontSize="11.5"
+                                                           Foreground="{StaticResource TextSecondaryBrush}" />
+                                            </Button>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <iconPacks:PackIconMaterial Kind="History" Width="15" Height="15"
+                                                                            Foreground="{StaticResource AccentCrimsonBrush}"
+                                                                            Margin="0,0,8,0" VerticalAlignment="Center" />
+                                                <TextBlock Text="Tệp mở gần đây" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+
+                                    <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto" Padding="6">
+                                        <ItemsControl ItemsSource="{Binding RecentFiles}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,1">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <Button Grid.Column="0"
+                                                                Style="{StaticResource RecentFileRowButtonStyle}"
+                                                                Command="{Binding DataContext.OpenRecentFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                ToolTip="{Binding FilePath}">
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="7"
+                                                                        Background="{StaticResource AccentCrimsonLightBrush}"
+                                                                        Margin="0,0,10,0">
+                                                                    <iconPacks:PackIconMaterial Kind="FileDocument" Width="16" Height="16"
+                                                                                                Foreground="{StaticResource AccentCrimsonBrush}"
+                                                                                                HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                </Border>
+
+                                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding FileName}" FontWeight="SemiBold"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                    <TextBlock Text="{Binding DirectoryPath}" FontSize="11.5"
+                                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                                               TextTrimming="CharacterEllipsis" />
+                                                                </StackPanel>
+
+                                                                <TextBlock Grid.Column="2" Text="{Binding LastOpenedDisplay}"
+                                                                           FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                                                           VerticalAlignment="Center" Margin="12,0,4,0" />
+                                                            </Grid>
+                                                        </Button>
+
+                                                        <Button Grid.Column="1"
+                                                                Style="{StaticResource FlatIconButtonStyle}"
+                                                                MinWidth="26" MinHeight="26" Padding="4" Margin="2,0,4,0"
+                                                                VerticalAlignment="Center"
+                                                                Command="{Binding DataContext.RemoveRecentFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                CommandParameter="{Binding}"
+                                                                ToolTip="Xóa khỏi danh sách">
+                                                            <iconPacks:PackIconMaterial Kind="Close" Width="12" Height="12"
+                                                                                        Foreground="{StaticResource TextMutedBrush}" />
+                                                        </Button>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                     </Grid>
                 </DockPanel>

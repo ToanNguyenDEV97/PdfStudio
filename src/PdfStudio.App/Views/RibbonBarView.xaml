@@ -360,6 +360,27 @@
                             <TextBlock Text="Thuộc tính" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
                         </StackPanel>
                     </ToggleButton>
+
+                    <Border Width="1" Height="42" Background="{StaticResource BorderSubtleBrush}" Margin="10,0" />
+
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding FitWidthCommand}" ToolTip="Vừa chiều rộng (Ctrl+2)">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="ArrowExpandHorizontal" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#2563EB" />
+                            <TextBlock Text="Vừa chiều rộng" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding FitPageCommand}" ToolTip="Vừa trọn trang (Ctrl+0)">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Fullscreen" Width="21" Height="21" HorizontalAlignment="Center" Foreground="#059669" />
+                            <TextBlock Text="Vừa trọn trang" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Button Style="{StaticResource RibbonLargeButtonStyle}" Command="{Binding ResetZoomCommand}" ToolTip="Kích thước thực 100% (Ctrl+1)">
+                        <StackPanel HorizontalAlignment="Center">
+                            <iconPacks:PackIconMaterial Kind="Magnify" Width="21" Height="21" HorizontalAlignment="Center" />
+                            <TextBlock Text="Tỷ lệ 100%" FontSize="11.5" Margin="0,5,0,0" HorizontalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </TabItem>
         </TabControl>

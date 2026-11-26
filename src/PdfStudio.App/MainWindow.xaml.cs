@@ -3,6 +3,9 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using PdfStudio.App.ViewModels;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Input;
 
 namespace PdfStudio.App;
 
@@ -83,4 +86,39 @@ public partial class MainWindow : Window
     }
 
     private void ExitButton_Click(object sender, RoutedEventArgs e) => Close();
+    private void PageJumpTextBox_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is TextBox tb)
+            tb.SelectAll();
+    }
+
+    private void PageJumpTextBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox tb) return;
+
+        if (e.Key == Key.Enter)
+        {
+            if (_viewModel.ActiveTab is not null && int.TryParse(tb.Text.Trim(), out int targetPage))
+            {
+                int clamped = Math.Clamp(targetPage, 1, Math.Max(1, _viewModel.ActiveTab.TotalPages));
+                _viewModel.ActiveTab.NavigateToPage(clamped - 1);
+            }
+
+            BindingOperations.GetBindingExpression(tb, TextBox.TextProperty)?.UpdateTarget();
+            Keyboard.ClearFocus();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            BindingOperations.GetBindingExpression(tb, TextBox.TextProperty)?.UpdateTarget();
+            Keyboard.ClearFocus();
+            e.Handled = true;
+        }
+    }
+
+    private void PageJumpTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is TextBox tb)
+            BindingOperations.GetBindingExpression(tb, TextBox.TextProperty)?.UpdateTarget();
+    }
 }

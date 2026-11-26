@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using PdfStudio.App.Services;
 
 namespace PdfStudio.App;
 
@@ -23,11 +24,16 @@ public partial class App : Application
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         string logFile = WriteErrorLog("UI", e.Exception);
-        MessageBox.Show(
-            $"Ứng dụng gặp lỗi không mong muốn:\n{e.Exception.Message}\n\nChi tiết đã được ghi tại:\n{logFile}",
-            "PdfStudio - Thông báo lỗi",
-            MessageBoxButton.OK,
-            MessageBoxImage.Error);
+        string msg = $"Ứng dụng gặp lỗi không mong muốn:\n{e.Exception.Message}\n\nChi tiết đã được ghi tại:\n{logFile}";
+
+        try
+        {
+            AppDialog.Error(msg, "PdfStudio - Thông báo lỗi");
+        }
+        catch
+        {
+            MessageBox.Show(msg, "PdfStudio - Thông báo lỗi", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
 
         e.Handled = true;
     }

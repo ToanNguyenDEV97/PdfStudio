@@ -12,9 +12,14 @@ using PdfStudio.Core;
 using PdfStudio.Core.Interfaces;
 using PdfStudio.Core.Models;
 using PdfStudio.Engines.MuPdf;
+using PdfStudio.App.Views;
 
 namespace PdfStudio.App.ViewModels;
-
+public enum ZoomFitMode
+{
+    FitWidth,
+    FitPage
+}
 public partial class DocumentTabViewModel : ObservableObject, IDisposable
 {
     private const int MaxCachedPages = 12;
@@ -35,8 +40,8 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
     private double _currentDpiScale = 1.0;
     private int _activeSearchMatchIndex = -1;
     private bool _disposed;
-
     public event Action<int>? ScrollToPageRequested;
+    public event Action<ZoomFitMode>? FitModeRequested;
 
     public UndoRedoManager UndoManager { get; } = new();
     public ObservableCollection<PdfPageViewModel> Pages { get; } = [];
@@ -130,6 +135,23 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
         CurrentPage = pageIndex + 1;
         ScrollToPageRequested?.Invoke(pageIndex);
     }
+    public void GoToPreviousPage()
+    {
+        if (CurrentPage > 1)
+            NavigateToPage(CurrentPage - 2);
+    }
+
+    public void GoToNextPage()
+    {
+        if (CurrentPage < Pages.Count)
+            NavigateToPage(CurrentPage);
+    }
+
+    public void RequestFitWidth() => FitModeRequested?.Invoke(ZoomFitMode.FitWidth);
+
+    public void RequestFitPage() => FitModeRequested?.Invoke(ZoomFitMode.FitPage);
+
+    public void ResetZoom() => ZoomPercent = 100;
 
     // =========================================================
     // 1. RENDER ẢO HÓA + LRU CACHE
@@ -468,29 +490,13 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
     {
         if (_disposed || Pages.Count == 0) return;
 
-        var dialog = new PrintDialog
+        var dialog = new PrintPreviewDialog(_readerEngine, FileName, CurrentPage)
         {
-            UserPageRangeEnabled = true,
-            MinPage = 1,
-            MaxPage = (uint)Pages.Count
+            Owner = Application.Current.MainWindow,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner
         };
-
-        if (dialog.ShowDialog() != true) return;
-
-        int fromIndex = 0;
-        int toIndex = Pages.Count - 1;
-
-        if (dialog.PageRangeSelection == PageRangeSelection.UserPages)
-        {
-            fromIndex = Math.Max(0, dialog.PageRange.PageFrom - 1);
-            toIndex = Math.Min(Pages.Count - 1, dialog.PageRange.PageTo - 1);
-        }
-
-        var printableSize = new Size(dialog.PrintableAreaWidth, dialog.PrintableAreaHeight);
-        var paginator = new StreamingPrintPaginator(_readerEngine, printableSize, fromIndex, toIndex);
-        dialog.PrintDocument(paginator, $"PdfStudio - {FileName}");
+        dialog.ShowDialog();
     }
-
     public async Task ApplyInPlaceEditAsync(Action<string, string> editAction, int? pageToFocusAfterReload = null)
     {
         if (_disposed || string.IsNullOrEmpty(FilePath)) return;

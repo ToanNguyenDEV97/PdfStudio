@@ -4,7 +4,7 @@ using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.Win32;
-using PdfStudio.App.Views;
+using PdfStudio.App.Services;
 using PdfStudio.Core.Interfaces;
 using PdfStudio.Core.Models;
 using PdfStudio.Engines.IText;
@@ -17,6 +17,15 @@ public partial class MainViewModel : ObservableObject
     private CancellationTokenSource? _searchDebounceCts;
 
     public ObservableCollection<DocumentTabViewModel> Tabs { get; } = [];
+    public ObservableCollection<RecentFileItem> RecentFiles { get; } = [];
+    public bool HasRecentFiles => RecentFiles.Count > 0;
+
+    public MainViewModel()
+    {
+        RecentFiles.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasRecentFiles));
+        foreach (var item in RecentFilesService.Load())
+            RecentFiles.Add(item);
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(WindowTitle))]
@@ -108,10 +117,23 @@ public partial class MainViewModel : ObservableObject
                 OpenDocumentFromPath(path);
         }
     }
-
     public void OpenDocumentFromPath(string filePath)
     {
-        if (!File.Exists(filePath)) return;
+        if (!File.Exists(filePath))
+        {
+            var stale = RecentFiles.FirstOrDefault(r =>
+                string.Equals(r.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+
+            if (stale is not null)
+            {
+                RecentFiles.Remove(stale);
+                RecentFilesService.Save(RecentFiles);
+                AppDialog.Warning(
+                    $"Tệp \"{stale.FileName}\" không còn tồn tại hoặc đã bị di chuyển.\nĐã tự động xóa khỏi danh sách gần đây.",
+                    "Không tìm thấy tệp");
+            }
+            return;
+        }
 
         var existing = Tabs.FirstOrDefault(t =>
             string.Equals(t.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
@@ -119,6 +141,7 @@ public partial class MainViewModel : ObservableObject
         if (existing is not null)
         {
             ActiveTab = existing;
+            RecordRecentFile(filePath);
             return;
         }
 
@@ -127,15 +150,59 @@ public partial class MainViewModel : ObservableObject
             var newTab = new DocumentTabViewModel(filePath);
             Tabs.Add(newTab);
             ActiveTab = newTab;
+            RecordRecentFile(filePath);
         }
         catch (Exception ex)
         {
-            MessageBox.Show(
+            AppDialog.Error(
                 $"Không thể mở tệp \"{Path.GetFileName(filePath)}\".\nChi tiết: {ex.Message}",
-                "Lỗi mở tệp PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+                "Lỗi mở tệp PDF");
         }
+    }
+    private void RecordRecentFile(string filePath)
+    {
+        string fullPath = Path.GetFullPath(filePath);
+        var existing = RecentFiles.FirstOrDefault(r =>
+            string.Equals(r.FilePath, fullPath, StringComparison.OrdinalIgnoreCase));
+
+        if (existing is not null)
+            RecentFiles.Remove(existing);
+
+        RecentFiles.Insert(0, new RecentFileItem
+        {
+            FilePath = fullPath,
+            FileName = Path.GetFileName(fullPath),
+            DirectoryPath = Path.GetDirectoryName(fullPath) ?? string.Empty,
+            LastOpenedUtc = DateTime.UtcNow
+        });
+
+        while (RecentFiles.Count > RecentFilesService.MaxItems)
+            RecentFiles.RemoveAt(RecentFiles.Count - 1);
+
+        RecentFilesService.Save(RecentFiles);
+    }
+
+    [RelayCommand]
+    private void OpenRecentFile(RecentFileItem? item)
+    {
+        if (item is not null)
+            OpenDocumentFromPath(item.FilePath);
+    }
+
+    [RelayCommand]
+    private void RemoveRecentFile(RecentFileItem? item)
+    {
+        if (item is null) return;
+        RecentFiles.Remove(item);
+        RecentFilesService.Save(RecentFiles);
+    }
+
+    [RelayCommand]
+    private void ClearRecentFiles()
+    {
+        if (RecentFiles.Count == 0) return;
+        RecentFiles.Clear();
+        RecentFilesService.Save(RecentFiles);
     }
 
     [RelayCommand]
@@ -146,7 +213,7 @@ public partial class MainViewModel : ObservableObject
 
         if (!ActiveTab.IsDirty)
         {
-            MessageBox.Show("Không có ghi chú hay thay đổi mới cần lưu.", "Lưu tài liệu", MessageBoxButton.OK, MessageBoxImage.Information);
+            AppDialog.Info("Không có ghi chú hay thay đổi mới cần lưu.", "Lưu tài liệu");
             return;
         }
 
@@ -156,7 +223,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Không thể lưu ghi chú vào tệp PDF.\nChi tiết: {ex.Message}", "Lỗi lưu tệp", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Không thể lưu ghi chú vào tệp PDF.\nChi tiết: {ex.Message}", "Lỗi lưu tệp");
         }
     }
 
@@ -188,11 +255,11 @@ public partial class MainViewModel : ObservableObject
                     File.Copy(sourcePath, dialog.FileName, overwrite: true);
             });
 
-            MessageBox.Show("Đã lưu bản sao thành công.", "PdfStudio", MessageBoxButton.OK, MessageBoxImage.Information);
+            AppDialog.Success("Đã lưu bản sao thành công.", "Lưu bản sao");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Lỗi lưu tệp: {ex.Message}", "PdfStudio", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Lỗi lưu tệp: {ex.Message}", "Lỗi lưu tệp");
         }
     }
 
@@ -237,12 +304,7 @@ public partial class MainViewModel : ObservableObject
         tab.CommitActiveFreeTextEdit();
         if (!tab.IsDirty) return true;
 
-        var choice = MessageBox.Show(
-            $"Tài liệu \"{tab.FileName}\" có ghi chú chưa được lưu.\nBạn có muốn lưu trước khi {actionDescription} không?",
-            "Chưa lưu thay đổi",
-            MessageBoxButton.YesNoCancel,
-            MessageBoxImage.Question);
-
+        var choice = AppDialog.ConfirmSave(tab.FileName, actionDescription);
         if (choice == MessageBoxResult.Cancel) return false;
 
         if (choice == MessageBoxResult.Yes)
@@ -253,7 +315,7 @@ public partial class MainViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Không thể lưu \"{tab.FileName}\".\nChi tiết: {ex.Message}", "Lỗi lưu tệp", MessageBoxButton.OK, MessageBoxImage.Error);
+                AppDialog.Error($"Không thể lưu \"{tab.FileName}\".\nChi tiết: {ex.Message}", "Lỗi lưu tệp");
                 return false;
             }
         }
@@ -278,6 +340,11 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand] private void ToggleRightPane() => IsRightPaneVisible = !IsRightPaneVisible;
     [RelayCommand] private void CopySelection() => ActiveTab?.CopySelectedText();
     [RelayCommand] private void PrintDocument() => ActiveTab?.PrintDocument();
+    [RelayCommand] private void PreviousPage() => ActiveTab?.GoToPreviousPage();
+    [RelayCommand] private void NextPage() => ActiveTab?.GoToNextPage();
+    [RelayCommand] private void FitWidth() => ActiveTab?.RequestFitWidth();
+    [RelayCommand] private void FitPage() => ActiveTab?.RequestFitPage();
+    [RelayCommand] private void ResetZoom() => ActiveTab?.ResetZoom();
 
     [RelayCommand]
     private void ZoomIn()
@@ -399,7 +466,7 @@ public partial class MainViewModel : ObservableObject
         if (openDialog.ShowDialog() != true) return;
         if (openDialog.FileNames.Length < 2)
         {
-            MessageBox.Show("Vui lòng chọn ít nhất 2 tệp PDF để gộp.", "Gộp PDF", MessageBoxButton.OK, MessageBoxImage.Warning);
+            AppDialog.Warning("Vui lòng chọn ít nhất 2 tệp PDF để gộp.", "Gộp PDF");
             return;
         }
 
@@ -419,7 +486,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Không thể gộp tệp PDF.\nChi tiết: {ex.Message}", "Lỗi gộp PDF", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Không thể gộp tệp PDF.\nChi tiết: {ex.Message}", "Lỗi gộp PDF");
         }
     }
 
@@ -428,20 +495,17 @@ public partial class MainViewModel : ObservableObject
     {
         if (ActiveTab is null) return;
 
-        var prompt = new PromptDialog(
+        string? rangeInput = AppDialog.Prompt(
             "Tách trang PDF",
             $"Nhập các trang muốn tách (Tổng: {ActiveTab.TotalPages} trang).\nVí dụ: 1-3, 5, 8",
-            $"{ActiveTab.CurrentPage}")
-        {
-            Owner = Application.Current.MainWindow
-        };
+            $"{ActiveTab.CurrentPage}");
 
-        if (prompt.ShowDialog() != true || string.IsNullOrWhiteSpace(prompt.InputValue)) return;
+        if (string.IsNullOrWhiteSpace(rangeInput)) return;
 
-        var pages = ParsePageRanges(prompt.InputValue, ActiveTab.TotalPages);
+        var pages = ParsePageRanges(rangeInput, ActiveTab.TotalPages);
         if (pages.Count == 0)
         {
-            MessageBox.Show("Định dạng dải trang không hợp lệ.", "Tách trang", MessageBoxButton.OK, MessageBoxImage.Warning);
+            AppDialog.Warning("Định dạng dải trang không hợp lệ.", "Tách trang");
             return;
         }
 
@@ -462,7 +526,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Không thể tách trang.\nChi tiết: {ex.Message}", "Lỗi tách trang", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Không thể tách trang.\nChi tiết: {ex.Message}", "Lỗi tách trang");
         }
     }
 
@@ -481,7 +545,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Không thể xoay trang {pageNum}.\nChi tiết: {ex.Message}", "Lỗi xoay trang", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Không thể xoay trang {pageNum}.\nChi tiết: {ex.Message}", "Lỗi xoay trang");
         }
     }
 
@@ -491,20 +555,19 @@ public partial class MainViewModel : ObservableObject
         if (ActiveTab is null) return;
         if (ActiveTab.TotalPages <= 1)
         {
-            MessageBox.Show("Không thể xóa trang cuối cùng của tài liệu.", "Xóa trang", MessageBoxButton.OK, MessageBoxImage.Warning);
+            AppDialog.Warning("Không thể xóa trang cuối cùng của tài liệu.", "Xóa trang");
             return;
         }
 
         if (!await EnsureTabSavedIfDirtyAsync(ActiveTab, "xóa trang")) return;
 
         int pageNum = ActiveTab.CurrentPage;
-        var confirm = MessageBox.Show(
+        if (!AppDialog.Confirm(
             $"Bạn có chắc chắn muốn xóa vĩnh viễn Trang {pageNum} khỏi tệp \"{ActiveTab.FileName}\" không?",
             "Xác nhận xóa trang",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning);
-
-        if (confirm != MessageBoxResult.Yes) return;
+            confirmText: "Xóa trang",
+            cancelText: "Hủy"))
+            return;
 
         try
         {
@@ -514,7 +577,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Không thể xóa trang {pageNum}.\nChi tiết: {ex.Message}", "Lỗi xóa trang", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Không thể xóa trang {pageNum}.\nChi tiết: {ex.Message}", "Lỗi xóa trang");
         }
     }
 
@@ -542,17 +605,15 @@ public partial class MainViewModel : ObservableObject
             long afterBytes = new FileInfo(saveDialog.FileName).Length;
             double savedPercent = beforeBytes > 0 ? (1.0 - (double)afterBytes / beforeBytes) * 100.0 : 0;
 
-            MessageBox.Show(
-                $"Đã nén xong!\nDung lượng cũ: {beforeBytes / 1024.0:N0} KB\nDung lượng mới: {afterBytes / 1024.0:N0} KB ({savedPercent:0.#}%).",
-                "Nén dung lượng PDF",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            AppDialog.Success(
+                $"Đã nén xong!\nDung lượng cũ: {beforeBytes / 1024.0:N0} KB\nDung lượng mới: {afterBytes / 1024.0:N0} KB (giảm {savedPercent:0.#}%).",
+                "Nén dung lượng PDF");
 
             OpenDocumentFromPath(saveDialog.FileName);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Lỗi khi nén tệp.\nChi tiết: {ex.Message}", "Lỗi nén PDF", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Lỗi khi nén tệp.\nChi tiết: {ex.Message}", "Lỗi nén PDF");
         }
     }
 
@@ -561,15 +622,12 @@ public partial class MainViewModel : ObservableObject
     {
         if (ActiveTab is null) return;
 
-        var prompt = new PromptDialog(
+        string? password = AppDialog.Prompt(
             "Đặt mật khẩu bảo vệ PDF (AES-256)",
             "Nhập mật khẩu yêu cầu khi mở tệp PDF mới:",
-            isPassword: true)
-        {
-            Owner = Application.Current.MainWindow
-        };
+            isPassword: true);
 
-        if (prompt.ShowDialog() != true || string.IsNullOrEmpty(prompt.InputValue)) return;
+        if (string.IsNullOrEmpty(password)) return;
 
         var saveDialog = new SaveFileDialog
         {
@@ -583,14 +641,13 @@ public partial class MainViewModel : ObservableObject
         try
         {
             string sourcePath = ActiveTab.FilePath;
-            string password = prompt.InputValue;
             await Task.Run(() => _writerEngine.ProtectWithPassword(sourcePath, saveDialog.FileName, password, password));
 
-            MessageBox.Show("Đã tạo tệp PDF bảo vệ bằng mật khẩu AES-256 thành công.", "Bảo mật PDF", MessageBoxButton.OK, MessageBoxImage.Information);
+            AppDialog.Success("Đã tạo tệp PDF bảo vệ bằng mật khẩu AES-256 thành công.", "Bảo mật PDF");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Không thể mã hóa tệp.\nChi tiết: {ex.Message}", "Lỗi bảo mật", MessageBoxButton.OK, MessageBoxImage.Error);
+            AppDialog.Error($"Không thể mã hóa tệp.\nChi tiết: {ex.Message}", "Lỗi bảo mật");
         }
     }
 

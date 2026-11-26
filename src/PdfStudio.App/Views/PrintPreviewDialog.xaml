@@ -1,0 +1,288 @@
+<Window x:Class="PdfStudio.App.Views.PrintPreviewDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:iconPacks="http://metro.mahapps.com/winfx/xaml/iconpacks"
+        Width="980" Height="680"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        FontSize="13"
+        Foreground="{StaticResource TextPrimaryBrush}"
+        PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Grid Margin="18">
+        <Border Background="{StaticResource SurfaceWhiteBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="1"
+                CornerRadius="12"
+                ClipToBounds="True">
+            <Border.Effect>
+                <DropShadowEffect Color="#0F172A" Opacity="0.24" BlurRadius="26" ShadowDepth="6" />
+            </Border.Effect>
+
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="336" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- ========================================================= -->
+                <!-- CỘT TRÁI: THIẾT LẬP IN ẤN                                 -->
+                <!-- ========================================================= -->
+                <Border Grid.Column="0"
+                        Background="{StaticResource SurfaceWhiteBrush}"
+                        BorderBrush="{StaticResource BorderSubtleBrush}"
+                        BorderThickness="0,0,1,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+
+                        <!-- Tiêu đề (kéo thả cửa sổ được) -->
+                        <Grid Grid.Row="0" Background="Transparent" Margin="20,18,16,12"
+                              MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <Border Width="36" Height="36" CornerRadius="9"
+                                    Background="{StaticResource AccentCrimsonLightBrush}"
+                                    Margin="0,0,12,0">
+                                <iconPacks:PackIconMaterial Kind="Printer" Width="19" Height="19"
+                                                            Foreground="{StaticResource AccentCrimsonBrush}"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="In tài liệu" FontSize="15.5" FontWeight="SemiBold" />
+                                <TextBlock x:Name="FileNameText" FontSize="11.5"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Danh sách tùy chọn in -->
+                        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="20,4,20,16">
+                            <StackPanel>
+                                <!-- Máy in -->
+                                <TextBlock Text="Máy in đích" FontSize="12" FontWeight="Medium"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <ComboBox x:Name="PrinterComboBox" Height="34"
+                                          DisplayMemberPath="DisplayName"
+                                          SelectionChanged="PrinterComboBox_SelectionChanged" />
+                                <TextBlock x:Name="PrinterStatusText" FontSize="11.5" Margin="2,4,0,14"
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
+
+                                <!-- Phạm vi trang -->
+                                <TextBlock Text="Trang cần in" FontSize="12" FontWeight="Medium"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <ComboBox x:Name="PageRangeComboBox" Height="34" Margin="0,0,0,8"
+                                          SelectionChanged="Settings_Changed">
+                                    <ComboBoxItem Content="Tất cả trang" IsSelected="True" />
+                                    <ComboBoxItem Content="Trang hiện tại" />
+                                    <ComboBoxItem Content="Tùy chỉnh (VD: 1-3, 5)" />
+                                </ComboBox>
+
+                                <StackPanel x:Name="CustomRangePanel" Visibility="Collapsed" Margin="0,0,0,10">
+                                    <TextBox x:Name="CustomRangeTextBox" Height="34"
+                                             TextChanged="CustomRangeTextBox_TextChanged" />
+                                    <TextBlock x:Name="RangeErrorText" FontSize="11.5" Foreground="#DC2626"
+                                               Margin="2,4,0,0" Visibility="Collapsed" />
+                                </StackPanel>
+
+                                <!-- Số bản sao -->
+                                <Grid Margin="0,6,0,14">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="Số bản in" FontSize="12" FontWeight="Medium"
+                                               VerticalAlignment="Center"
+                                               Foreground="{StaticResource TextSecondaryBrush}" />
+
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                        <Button Style="{StaticResource SecondaryOutlineButtonStyle}"
+                                                Width="32" Height="32" Padding="0"
+                                                Click="DecreaseCopies_Click">
+                                            <iconPacks:PackIconMaterial Kind="Minus" Width="13" Height="13" />
+                                        </Button>
+                                        <TextBox x:Name="CopiesTextBox" Text="1" Width="48" Height="32"
+                                                 Margin="6,0" TextAlignment="Center"
+                                                 TextChanged="CopiesTextBox_TextChanged" />
+                                        <Button Style="{StaticResource SecondaryOutlineButtonStyle}"
+                                                Width="32" Height="32" Padding="0"
+                                                Click="IncreaseCopies_Click">
+                                            <iconPacks:PackIconMaterial Kind="Plus" Width="13" Height="13" />
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- Hướng giấy -->
+                                <TextBlock Text="Hướng giấy" FontSize="12" FontWeight="Medium"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <ComboBox x:Name="OrientationComboBox" Height="34" Margin="0,0,0,14"
+                                          SelectionChanged="Settings_Changed">
+                                    <ComboBoxItem Content="Dọc (Portrait)" IsSelected="True" />
+                                    <ComboBoxItem Content="Ngang (Landscape)" />
+                                </ComboBox>
+
+                                <!-- Tỷ lệ in -->
+                                <TextBlock Text="Tỷ lệ trang" FontSize="12" FontWeight="Medium"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <ComboBox x:Name="ScaleComboBox" Height="34" Margin="0,0,0,14"
+                                          SelectionChanged="Settings_Changed">
+                                    <ComboBoxItem Content="Vừa khổ giấy (Fit)" IsSelected="True" />
+                                    <ComboBoxItem Content="Kích thước thực (100%)" />
+                                </ComboBox>
+
+                                <!-- Màu sắc -->
+                                <TextBlock Text="Màu sắc" FontSize="12" FontWeight="Medium"
+                                           Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,6" />
+                                <ComboBox x:Name="ColorComboBox" Height="34" Margin="0,0,0,8"
+                                          SelectionChanged="Settings_Changed">
+                                    <ComboBoxItem Content="Màu (Color)" IsSelected="True" />
+                                    <ComboBoxItem Content="Đen trắng (Grayscale)" />
+                                </ComboBox>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <!-- Tóm tắt & Nút hành động -->
+                        <Border Grid.Row="2"
+                                Background="{StaticResource SurfaceSubtleBrush}"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="0,1,0,0"
+                                Padding="20,14">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <TextBlock x:Name="PrintSummaryText" Grid.Row="0"
+                                           FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                                           Margin="0,0,0,12" />
+
+                                <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                    <Button Content="Hủy" MinWidth="84" Margin="0,0,8,0"
+                                            IsCancel="True"
+                                            Style="{StaticResource SecondaryOutlineButtonStyle}" />
+                                    <Button x:Name="PrintButton" MinWidth="118"
+                                            IsDefault="True"
+                                            Click="PrintButton_Click"
+                                            Style="{StaticResource PrimaryCrimsonButtonStyle}">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <iconPacks:PackIconMaterial Kind="Printer" Width="15" Height="15" Margin="0,0,7,0" />
+                                            <TextBlock Text="In ngay" VerticalAlignment="Center" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- ========================================================= -->
+                <!-- CỘT PHẢI: BẢNG XEM TRƯỚC KHI IN (LIVE PREVIEW)            -->
+                <!-- ========================================================= -->
+                <Grid Grid.Column="1" Background="{StaticResource CanvasWorkspaceBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- Thanh tiêu đề khu vực xem trước -->
+                    <Grid Grid.Row="0" Background="Transparent" Margin="18,14,14,4"
+                          MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock x:Name="PreviewHeaderText"
+                                   Text="Xem trước bản in"
+                                   FontSize="12.5" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   VerticalAlignment="Center" />
+
+                        <Button Grid.Column="1" Style="{StaticResource FlatIconButtonStyle}"
+                                MinWidth="28" MinHeight="28" Padding="5"
+                                IsCancel="True" ToolTip="Đóng (Esc)">
+                            <iconPacks:PackIconMaterial Kind="Close" Width="14" Height="14"
+                                                        Foreground="{StaticResource TextSecondaryBrush}" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Khung tờ giấy mô phỏng đúng tỷ lệ khổ in -->
+                    <Grid Grid.Row="1" Margin="28,10,28,10">
+                        <Viewbox Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Background="White" CornerRadius="2" Margin="12">
+                                <Border.Effect>
+                                    <DropShadowEffect Color="#0F172A" Opacity="0.20" BlurRadius="22" ShadowDepth="5" />
+                                </Border.Effect>
+
+                                <Grid x:Name="PaperSheetGrid" Width="794" Height="1123"
+                                      Background="White" ClipToBounds="True">
+                                    <!-- Lề an toàn mô phỏng vùng in -->
+                                    <Grid Margin="18" ClipToBounds="True">
+                                        <Image x:Name="PreviewImage"
+                                               Stretch="Uniform"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               RenderOptions.BitmapScalingMode="HighQuality" />
+                                    </Grid>
+
+                                    <TextBlock x:Name="PreviewLoadingText"
+                                               Text="Đang tải xem trước..."
+                                               FontSize="24" Foreground="#9CA3AF"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               Visibility="Collapsed" />
+                                </Grid>
+                            </Border>
+                        </Viewbox>
+                    </Grid>
+
+                    <!-- Thanh chuyển trang xem trước nổi phía dưới -->
+                    <Border Grid.Row="2"
+                            HorizontalAlignment="Center"
+                            Margin="0,4,0,18"
+                            Padding="6,4"
+                            Background="{StaticResource SurfaceWhiteBrush}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1"
+                            CornerRadius="20">
+                        <Border.Effect>
+                            <DropShadowEffect Color="#0F172A" Opacity="0.10" BlurRadius="14" ShadowDepth="3" />
+                        </Border.Effect>
+
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="PrevPageButton" Style="{StaticResource FlatIconButtonStyle}"
+                                    MinWidth="28" MinHeight="28" Padding="4"
+                                    Click="PrevPageButton_Click" ToolTip="Trang trước">
+                                <iconPacks:PackIconMaterial Kind="ChevronLeft" Width="17" Height="17" />
+                            </Button>
+
+                            <TextBlock x:Name="PreviewPageIndicator"
+                                       Text="1 / 1"
+                                       MinWidth="136" TextAlignment="Center"
+                                       VerticalAlignment="Center" FontSize="12.5" FontWeight="SemiBold" />
+
+                            <Button x:Name="NextPageButton" Style="{StaticResource FlatIconButtonStyle}"
+                                    MinWidth="28" MinHeight="28" Padding="4"
+                                    Click="NextPageButton_Click" ToolTip="Trang kế tiếp">
+                                <iconPacks:PackIconMaterial Kind="ChevronRight" Width="17" Height="17" />
+                            </Button>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
