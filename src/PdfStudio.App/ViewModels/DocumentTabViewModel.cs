@@ -44,6 +44,7 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
     public event Action<ZoomFitMode>? FitModeRequested;
 
     public UndoRedoManager UndoManager { get; } = new();
+    public string? Password { get; }
     public ObservableCollection<PdfPageViewModel> Pages { get; } = [];
 
     [ObservableProperty] private string _fileName;
@@ -70,12 +71,13 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
     public bool CanUndo => UndoManager.CanUndo;
     public bool CanRedo => UndoManager.CanRedo;
 
-    public DocumentTabViewModel(string filePath)
+    public DocumentTabViewModel(string filePath, string? password = null)
     {
         FilePath = filePath;
         FileName = Path.GetFileName(filePath);
+        Password = password;
 
-        _readerEngine = new MuPdfReaderEngine(filePath);
+        _readerEngine = new MuPdfReaderEngine(filePath, password);
         TotalPages = _readerEngine.PageCount;
 
         foreach (var meta in _readerEngine.GetAllPageMetadata())
@@ -532,7 +534,7 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
             if (File.Exists(tempFile))
                 try { File.Delete(tempFile); } catch { }
 
-            _readerEngine = new MuPdfReaderEngine(FilePath);
+            _readerEngine = new MuPdfReaderEngine(FilePath, Password);
             TotalPages = _readerEngine.PageCount;
 
             Pages.Clear();
@@ -783,7 +785,7 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
 
         int stayPage = CurrentPage;
         await ApplyInPlaceEditAsync(
-            (src, dst) => writerEngine.SaveAnnotations(src, dst, pending),
+            (src, dst) => writerEngine.SaveAnnotations(src, dst, pending, Password),
             pageToFocusAfterReload: stayPage);
     }
 

@@ -8,6 +8,7 @@ using PdfStudio.App.Services;
 using PdfStudio.Core.Interfaces;
 using PdfStudio.Core.Models;
 using PdfStudio.Engines.IText;
+using PdfStudio.Core;
 
 namespace PdfStudio.App.ViewModels;
 
@@ -145,18 +146,36 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        try
+        string fileName = Path.GetFileName(filePath);
+        string? password = null;
+
+        while (true)
         {
-            var newTab = new DocumentTabViewModel(filePath);
-            Tabs.Add(newTab);
-            ActiveTab = newTab;
-            RecordRecentFile(filePath);
-        }
-        catch (Exception ex)
-        {
-            AppDialog.Error(
-                $"Không thể mở tệp \"{Path.GetFileName(filePath)}\".\nChi tiết: {ex.Message}",
-                "Lỗi mở tệp PDF");
+            try
+            {
+                var newTab = new DocumentTabViewModel(filePath, password);
+                Tabs.Add(newTab);
+                ActiveTab = newTab;
+                RecordRecentFile(filePath);
+                return;
+            }
+            catch (PdfPasswordRequiredException ex)
+            {
+                string promptMsg = ex.IsIncorrectPassword
+                    ? $"Mật khẩu không đúng.\nVui lòng nhập lại mật khẩu cho tệp \"{fileName}\":"
+                    : $"Tệp \"{fileName}\" được bảo vệ bằng mật khẩu.\nNhập mật khẩu để mở tài liệu:";
+
+                password = AppDialog.Prompt("Yêu cầu mật khẩu PDF", promptMsg, isPassword: true);
+                if (password is null)
+                    return;
+            }
+            catch (Exception ex)
+            {
+                AppDialog.Error(
+                    $"Không thể mở tệp \"{fileName}\".\nChi tiết: {ex.Message}",
+                    "Lỗi mở tệp PDF");
+                return;
+            }
         }
     }
     private void RecordRecentFile(string filePath)
@@ -250,7 +269,7 @@ public partial class MainViewModel : ObservableObject
             await Task.Run(() =>
             {
                 if (pending.Count > 0)
-                    _writerEngine.SaveAnnotations(sourcePath, dialog.FileName, pending);
+                    _writerEngine.SaveAnnotations(sourcePath, dialog.FileName, pending, ActiveTab.Password);
                 else
                     File.Copy(sourcePath, dialog.FileName, overwrite: true);
             });
@@ -521,7 +540,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             string sourcePath = ActiveTab.FilePath;
-            await Task.Run(() => _writerEngine.ExtractPages(sourcePath, saveDialog.FileName, pages));
+            await Task.Run(() => _writerEngine.ExtractPages(sourcePath, saveDialog.FileName, pages, ActiveTab.Password));
             OpenDocumentFromPath(saveDialog.FileName);
         }
         catch (Exception ex)
@@ -540,7 +559,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await ActiveTab.ApplyInPlaceEditAsync(
-                (src, dst) => _writerEngine.RotatePage(src, dst, pageNum, 90),
+                (src, dst) => _writerEngine.RotatePage(src, dst, pageNum, 90, ActiveTab.Password),
                 pageToFocusAfterReload: pageNum);
         }
         catch (Exception ex)
@@ -572,7 +591,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             await ActiveTab.ApplyInPlaceEditAsync(
-                (src, dst) => _writerEngine.DeletePage(src, dst, pageNum),
+                (src, dst) => _writerEngine.DeletePage(src, dst, pageNum, ActiveTab.Password),
                 pageToFocusAfterReload: Math.Max(1, pageNum - 1));
         }
         catch (Exception ex)
@@ -600,7 +619,7 @@ public partial class MainViewModel : ObservableObject
             string sourcePath = ActiveTab.FilePath;
             long beforeBytes = new FileInfo(sourcePath).Length;
 
-            await Task.Run(() => _writerEngine.CompressFile(sourcePath, saveDialog.FileName));
+            await Task.Run(() => _writerEngine.CompressFile(sourcePath, saveDialog.FileName, ActiveTab.Password));
 
             long afterBytes = new FileInfo(saveDialog.FileName).Length;
             double savedPercent = beforeBytes > 0 ? (1.0 - (double)afterBytes / beforeBytes) * 100.0 : 0;
@@ -641,7 +660,7 @@ public partial class MainViewModel : ObservableObject
         try
         {
             string sourcePath = ActiveTab.FilePath;
-            await Task.Run(() => _writerEngine.ProtectWithPassword(sourcePath, saveDialog.FileName, password, password));
+            await Task.Run(() => _writerEngine.ProtectWithPassword(sourcePath, saveDialog.FileName, password, password, currentPassword: ActiveTab.Password));
 
             AppDialog.Success("Đã tạo tệp PDF bảo vệ bằng mật khẩu AES-256 thành công.", "Bảo mật PDF");
         }

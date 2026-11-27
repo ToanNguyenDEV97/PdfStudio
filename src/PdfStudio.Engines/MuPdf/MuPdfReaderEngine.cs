@@ -1,9 +1,16 @@
+using System.Text;
 using MuPDFCore;
+using PdfStudio.Core;
 using PdfStudio.Core.Interfaces;
 using PdfStudio.Core.Models;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.Core;
+using ITextBadPasswordException = iText.Kernel.Exceptions.BadPasswordException;
+using ITextPdfDocument = iText.Kernel.Pdf.PdfDocument;
+using ITextPdfReader = iText.Kernel.Pdf.PdfReader;
+using ITextPdfWriter = iText.Kernel.Pdf.PdfWriter;
+using ITextReaderProperties = iText.Kernel.Pdf.ReaderProperties;
 
 namespace PdfStudio.Engines.MuPdf;
 
@@ -15,19 +22,82 @@ public sealed class MuPdfReaderEngine : IPdfReaderEngine
     private MuPDFDocument? _document;
     private PdfDocument? _pigDocument;
     private bool _disposed;
+    private byte[]? _decryptedBytes;
 
     public string FilePath { get; }
     public int PageCount { get; }
 
-    public MuPdfReaderEngine(string filePath)
+    public MuPdfReaderEngine(string filePath, string? password = null)
     {
         if (!File.Exists(filePath))
             throw new FileNotFoundException("Không tìm thấy tệp PDF.", filePath);
 
         FilePath = filePath;
-        _context = new MuPDFContext();
-        _document = new MuPDFDocument(_context, filePath);
-        PageCount = _document.Pages.Count;
+        _decryptedBytes = CheckOrDecryptPdf(filePath, password);
+
+        try
+        {
+            _context = new MuPDFContext();
+            _document = _decryptedBytes is not null
+                ? new MuPDFDocument(_context, _decryptedBytes, InputFileTypes.PDF)
+                : new MuPDFDocument(_context, filePath);
+            PageCount = _document.Pages.Count;
+        }
+        catch
+        {
+            _document?.Dispose();
+            _document = null;
+            _context?.Dispose();
+            _context = null;
+            _decryptedBytes = null;
+            throw;
+        }
+    }
+
+    private static byte[]? CheckOrDecryptPdf(string filePath, string? password)
+    {
+        var readerProps = new ITextReaderProperties();
+        if (!string.IsNullOrEmpty(password))
+            readerProps.SetPassword(Encoding.UTF8.GetBytes(password));
+
+        try
+        {
+            if (password is null)
+            {
+                using var checkReader = new ITextPdfReader(filePath, readerProps);
+                checkReader.SetUnethicalReading(true);
+                using var checkDoc = new ITextPdfDocument(checkReader);
+                return null;
+            }
+
+            using var ms = new MemoryStream();
+            using (var reader = new ITextPdfReader(filePath, readerProps))
+            {
+                reader.SetUnethicalReading(true);
+                using var writer = new ITextPdfWriter(ms);
+                writer.SetCloseStream(false);
+                using var doc = new ITextPdfDocument(reader, writer);
+            }
+            return ms.ToArray();
+        }
+        catch (ITextBadPasswordException ex)
+        {
+            throw new PdfPasswordRequiredException(isIncorrectPassword: password is not null, ex);
+        }
+        catch when (password is null)
+        {
+            // Nếu tệp không mã hóa nhưng có lỗi cấu trúc nhẹ với iText, vẫn để MuPDF mở trực tiếp
+            return null;
+        }
+    }
+    private static bool IsPasswordError(Exception ex)
+    {
+        string typeName = ex.GetType().Name;
+        string msg = ex.Message ?? string.Empty;
+        return typeName.Contains("Password", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("password", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("authenticate", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("encrypted", StringComparison.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<PageMetadata> GetAllPageMetadata()
@@ -102,7 +172,9 @@ public sealed class MuPdfReaderEngine : IPdfReaderEngine
         {
             ThrowIfDisposed();
 
-            _pigDocument ??= PdfDocument.Open(FilePath);
+            _pigDocument ??= _decryptedBytes is not null
+                ? PdfDocument.Open(_decryptedBytes)
+                : PdfDocument.Open(FilePath);
             if (pageIndex + 1 > _pigDocument.NumberOfPages)
                 return [];
 
@@ -242,6 +314,7 @@ public sealed class MuPdfReaderEngine : IPdfReaderEngine
                 _document = null;
                 _context?.Dispose();
                 _context = null;
+                _decryptedBytes = null;
             }
         }
     }

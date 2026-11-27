@@ -12,12 +12,13 @@ using iText.Kernel.Pdf.Xobject;
 using iText.Layout;
 using iText.Layout.Element;
 using PdfStudio.Core.Models;
+using System.Text;
 
 namespace PdfStudio.Engines.IText;
 
 internal static class ITextAnnotationSaver
 {
-    public static void Save(string inputPath, string outputPath, IReadOnlyList<PdfAnnotationModel> annotations)
+    public static void Save(string inputPath, string outputPath, IReadOnlyList<PdfAnnotationModel> annotations, string? password = null)
     {
         if (annotations.Count == 0)
         {
@@ -25,7 +26,11 @@ internal static class ITextAnnotationSaver
             return;
         }
 
-        using var reader = new PdfReader(inputPath);
+        var readerProps = new ReaderProperties();
+        if (!string.IsNullOrEmpty(password))
+            readerProps.SetPassword(Encoding.UTF8.GetBytes(password));
+
+        using var reader = new PdfReader(inputPath, readerProps);
         reader.SetUnethicalReading(true);
 
         using var writer = new PdfWriter(outputPath);

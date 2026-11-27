@@ -32,14 +32,14 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         }
     }
 
-    public void ExtractPages(string inputPath, string outputPath, IReadOnlyList<int> oneBasedPageNumbers)
+    public void ExtractPages(string inputPath, string outputPath, IReadOnlyList<int> oneBasedPageNumbers, string? password = null)
     {
         EnsureDistinctPaths(inputPath, outputPath);
 
         if (oneBasedPageNumbers.Count == 0)
             throw new ArgumentException("Danh sách trang cần tách không được rỗng.");
 
-        using var reader = CreateReader(inputPath);
+        using var reader = CreateReader(inputPath, password);
         using var srcDoc = new PdfDocument(reader);
         int total = srcDoc.GetNumberOfPages();
 
@@ -55,12 +55,12 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         srcDoc.CopyPagesTo(validPages, destDoc);
     }
 
-    public void RotatePage(string inputPath, string outputPath, int oneBasedPageNumber, int clockwiseDegrees = 90)
+    public void RotatePage(string inputPath, string outputPath, int oneBasedPageNumber, int clockwiseDegrees = 90, string? password = null)
     {
         EnsureDistinctPaths(inputPath, outputPath);
 
-        using var reader = CreateReader(inputPath);
-        using var writer = new PdfWriter(outputPath);
+        using var reader = CreateReader(inputPath, password);
+        using var writer = new PdfWriter(outputPath, CreateWriterProperties(password));
         using var pdfDoc = new PdfDocument(reader, writer);
 
         if (oneBasedPageNumber < 1 || oneBasedPageNumber > pdfDoc.GetNumberOfPages())
@@ -71,12 +71,12 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         page.SetRotation(nextRotation);
     }
 
-    public void DeletePage(string inputPath, string outputPath, int oneBasedPageNumber)
+    public void DeletePage(string inputPath, string outputPath, int oneBasedPageNumber, string? password = null)
     {
         EnsureDistinctPaths(inputPath, outputPath);
 
-        using var reader = CreateReader(inputPath);
-        using var writer = new PdfWriter(outputPath);
+        using var reader = CreateReader(inputPath, password);
+        using var writer = new PdfWriter(outputPath, CreateWriterProperties(password));
         using var pdfDoc = new PdfDocument(reader, writer);
 
         int total = pdfDoc.GetNumberOfPages();
@@ -89,18 +89,17 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         pdfDoc.RemovePage(oneBasedPageNumber);
     }
 
-    public void CompressFile(string inputPath, string outputPath)
+    public void CompressFile(string inputPath, string outputPath, string? password = null)
     {
         EnsureDistinctPaths(inputPath, outputPath);
 
-        if (_qpdf.TryCompress(inputPath, outputPath))
+        if (_qpdf.TryCompress(inputPath, outputPath, password))
             return;
 
-        var writerProps = new WriterProperties()
-            .SetFullCompressionMode(true)
+        var writerProps = CreateWriterProperties(password, fullCompression: true)
             .SetCompressionLevel(CompressionConstants.BEST_COMPRESSION);
 
-        using var reader = CreateReader(inputPath);
+        using var reader = CreateReader(inputPath, password);
         using var writer = new PdfWriter(outputPath, writerProps);
         writer.SetSmartMode(true);
         using var pdfDoc = new PdfDocument(reader, writer);
@@ -112,7 +111,8 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
         string userPassword,
         string ownerPassword,
         bool allowPrint = true,
-        bool allowCopy = true)
+        bool allowCopy = true,
+        string? currentPassword = null)
     {
         EnsureDistinctPaths(inputPath, outputPath);
 
@@ -130,22 +130,44 @@ public sealed class ITextWriterEngine : IPdfWriterEngine
             .SetFullCompressionMode(true)
             .SetStandardEncryption(userBytes, ownerBytes, permissions, EncryptionConstants.ENCRYPTION_AES_256);
 
-        using var reader = CreateReader(inputPath);
+        using var reader = CreateReader(inputPath, currentPassword);
         using var writer = new PdfWriter(outputPath, writerProps);
         using var pdfDoc = new PdfDocument(reader, writer);
     }
 
-    public void SaveAnnotations(string inputPath, string outputPath, IReadOnlyList<PdfAnnotationModel> annotations)
+    public void SaveAnnotations(string inputPath, string outputPath, IReadOnlyList<PdfAnnotationModel> annotations, string? password = null)
     {
         EnsureDistinctPaths(inputPath, outputPath);
-        ITextAnnotationSaver.Save(inputPath, outputPath, annotations);
+        ITextAnnotationSaver.Save(inputPath, outputPath, annotations, password);
     }
 
-    private static PdfReader CreateReader(string path)
+    private static PdfReader CreateReader(string path, string? password = null)
     {
-        var reader = new PdfReader(path);
+        var props = new ReaderProperties();
+        if (!string.IsNullOrEmpty(password))
+            props.SetPassword(Encoding.UTF8.GetBytes(password));
+
+        var reader = new PdfReader(path, props);
         reader.SetUnethicalReading(true);
         return reader;
+    }
+
+    private static WriterProperties CreateWriterProperties(string? password = null, bool fullCompression = false)
+    {
+        var props = new WriterProperties();
+        if (fullCompression) props.SetFullCompressionMode(true);
+
+        if (!string.IsNullOrEmpty(password))
+        {
+            byte[] passBytes = Encoding.UTF8.GetBytes(password);
+            props.SetStandardEncryption(
+                passBytes,
+                passBytes,
+                EncryptionConstants.ALLOW_PRINTING | EncryptionConstants.ALLOW_COPY,
+                EncryptionConstants.ENCRYPTION_AES_256);
+        }
+
+        return props;
     }
 
     private static void EnsureDistinctPaths(string inputPath, string outputPath)
