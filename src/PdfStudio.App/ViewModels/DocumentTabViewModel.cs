@@ -46,6 +46,8 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
     public UndoRedoManager UndoManager { get; } = new();
     public string? Password { get; }
     public ObservableCollection<PdfPageViewModel> Pages { get; } = [];
+    public ObservableCollection<PdfBookmarkItem> Bookmarks { get; } = [];
+    public bool HasBookmarks => Bookmarks.Count > 0;
 
     [ObservableProperty] private string _fileName;
     [ObservableProperty] private string _filePath;
@@ -92,6 +94,7 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
             OnPropertyChanged(nameof(CanRedo));
             IsDirty = Pages.Any(p => p.Annotations.Count > 0);
         };
+        _ = LoadBookmarksAsync();
     }
 
     partial void OnIsDirtyChanged(bool value) => OnPropertyChanged(nameof(TabDisplayName));
@@ -136,6 +139,28 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
         if (pageIndex < 0 || pageIndex >= Pages.Count) return;
         CurrentPage = pageIndex + 1;
         ScrollToPageRequested?.Invoke(pageIndex);
+    }
+    public async Task LoadBookmarksAsync()
+    {
+        if (_disposed) return;
+
+        IReadOnlyList<PdfBookmarkItem> items;
+        try
+        {
+            items = await Task.Run(() => _disposed ? [] : _readerEngine.GetBookmarks());
+        }
+        catch
+        {
+            items = [];
+        }
+
+        if (_disposed) return;
+
+        Bookmarks.Clear();
+        foreach (var item in items)
+            Bookmarks.Add(item);
+
+        OnPropertyChanged(nameof(HasBookmarks));
     }
     public void GoToPreviousPage()
     {
@@ -552,6 +577,7 @@ public partial class DocumentTabViewModel : ObservableObject, IDisposable
                 ScrollToPageRequested?.Invoke(clampedPage - 1);
                 _ = RequestVisiblePagesAsync(clampedPage - 1, clampedPage - 1, forceRerender: true);
                 _ = RequestVisibleThumbnailsAsync(Math.Max(0, clampedPage - 3), Math.Min(Pages.Count - 1, clampedPage + 3));
+                _ = LoadBookmarksAsync();
             }
         }
     }

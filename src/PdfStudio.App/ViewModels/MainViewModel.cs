@@ -34,6 +34,11 @@ public partial class MainViewModel : ObservableObject
     private DocumentTabViewModel? _activeTab;
 
     [ObservableProperty] private bool _isLeftPaneVisible = true;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsThumbnailsTabActive))]
+    private bool _isBookmarksTabActive;
+
+    public bool IsThumbnailsTabActive => !IsBookmarksTabActive;
     [ObservableProperty] private bool _isRightPaneVisible = true;
     [ObservableProperty] private bool _isSearchBarVisible;
     [ObservableProperty] private string _searchQuery = string.Empty;
@@ -412,6 +417,26 @@ public partial class MainViewModel : ObservableObject
 
     [RelayCommand] private void FindNext() => ActiveTab?.NextSearchMatch();
     [RelayCommand] private void FindPrevious() => ActiveTab?.PreviousSearchMatch();
+    [RelayCommand]
+    private void ShowThumbnailsPane()
+    {
+        IsLeftPaneVisible = true;
+        IsBookmarksTabActive = false;
+    }
+
+    [RelayCommand]
+    private void ShowBookmarksPane()
+    {
+        IsLeftPaneVisible = true;
+        IsBookmarksTabActive = true;
+    }
+
+    [RelayCommand]
+    private void NavigateToBookmark(PdfBookmarkItem? item)
+    {
+        if (ActiveTab is not null && item is not null && item.PageIndex >= 0)
+            ActiveTab.NavigateToPage(item.PageIndex);
+    }
 
     // =========================================================
     // 3. CÔNG CỤ GHI CHÚ, THUỘC TÍNH & UNDO / REDO

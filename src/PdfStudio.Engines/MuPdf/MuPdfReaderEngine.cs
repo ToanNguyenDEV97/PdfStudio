@@ -11,6 +11,12 @@ using ITextPdfDocument = iText.Kernel.Pdf.PdfDocument;
 using ITextPdfReader = iText.Kernel.Pdf.PdfReader;
 using ITextPdfWriter = iText.Kernel.Pdf.PdfWriter;
 using ITextReaderProperties = iText.Kernel.Pdf.ReaderProperties;
+using ITextPdfDestination = iText.Kernel.Pdf.Navigation.PdfDestination;
+using ITextPdfDictionary = iText.Kernel.Pdf.PdfDictionary;
+using ITextPdfName = iText.Kernel.Pdf.PdfName;
+using ITextPdfNumber = iText.Kernel.Pdf.PdfNumber;
+using ITextPdfObject = iText.Kernel.Pdf.PdfObject;
+using ITextPdfOutline = iText.Kernel.Pdf.PdfOutline;
 
 namespace PdfStudio.Engines.MuPdf;
 
@@ -295,6 +301,111 @@ public sealed class MuPdfReaderEngine : IPdfReaderEngine
         double maxY = Math.Max(p1.Y, p2.Y);
 
         return (minX, minY, Math.Max(1, maxX - minX), Math.Max(1, maxY - minY));
+    }
+    public IReadOnlyList<PdfBookmarkItem> GetBookmarks()
+    {
+        byte[]? decryptedCopy;
+        string path;
+        int totalPages;
+
+        lock (_syncLock)
+        {
+            ThrowIfDisposed();
+            decryptedCopy = _decryptedBytes;
+            path = FilePath;
+            totalPages = PageCount;
+        }
+
+        try
+        {
+            using Stream? memStream = decryptedCopy is not null
+                ? new MemoryStream(decryptedCopy, writable: false)
+                : null;
+
+            using var reader = memStream is not null
+                ? new ITextPdfReader(memStream)
+                : new ITextPdfReader(path);
+            reader.SetUnethicalReading(true);
+
+            using var doc = new ITextPdfDocument(reader);
+            ITextPdfOutline? root = doc.GetOutlines(false);
+            if (root is null) return [];
+
+            var namedDests = doc.GetCatalog().GetNameTree(ITextPdfName.Dests).GetNames();
+            return ReadOutlineChildren(root, doc, namedDests, totalPages, depth: 0);
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    private static List<PdfBookmarkItem> ReadOutlineChildren<TNameKey>(
+        ITextPdfOutline parent,
+        ITextPdfDocument doc,
+        IDictionary<TNameKey, ITextPdfObject> namedDests,
+        int totalPages,
+        int depth)
+    {
+        var list = new List<PdfBookmarkItem>();
+        if (depth > 20) return list;
+
+        IList<ITextPdfOutline>? children = parent.GetAllChildren();
+        if (children is null || children.Count == 0) return list;
+
+        foreach (ITextPdfOutline child in children)
+        {
+            if (child is null) continue;
+
+            int pageIndex = ResolveOutlinePageIndex(child, doc, namedDests, totalPages);
+            var subItems = ReadOutlineChildren(child, doc, namedDests, totalPages, depth + 1);
+            list.Add(new PdfBookmarkItem(child.GetTitle() ?? string.Empty, pageIndex, subItems));
+        }
+
+        return list;
+    }
+
+    private static int ResolveOutlinePageIndex<TNameKey>(
+        ITextPdfOutline outline,
+        ITextPdfDocument doc,
+        IDictionary<TNameKey, ITextPdfObject> namedDests,
+        int totalPages)
+    {
+        try
+        {
+            ITextPdfDestination? dest = outline.GetDestination();
+
+            if (dest is null)
+            {
+                ITextPdfDictionary? action = outline.GetContent()?.GetAsDictionary(ITextPdfName.A);
+                if (action is not null && ITextPdfName.GoTo.Equals(action.GetAsName(ITextPdfName.S)))
+                {
+                    ITextPdfObject? dObj = action.Get(ITextPdfName.D);
+                    if (dObj is not null)
+                        dest = ITextPdfDestination.MakeDestination(dObj);
+                }
+            }
+
+            if (dest is null) return -1;
+
+            // Gọi động với dictionary chuẩn của phiên bản iText đang cài
+            ITextPdfObject? pageObj = dest.GetDestinationPage((dynamic)namedDests);
+
+            int oneBasedPage = pageObj switch
+            {
+                ITextPdfDictionary pageDict => doc.GetPageNumber(pageDict),
+                ITextPdfNumber pageNum => pageNum.IntValue() + 1,
+                _ => 0
+            };
+
+            return oneBasedPage >= 1 && oneBasedPage <= totalPages
+                ? oneBasedPage - 1
+                : -1;
+        }
+        catch
+        {
+            return -1;
+        }
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);

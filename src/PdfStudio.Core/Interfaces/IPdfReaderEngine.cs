@@ -11,4 +11,5 @@ public interface IPdfReaderEngine : IDisposable
     RenderedPageResult RenderPage(int pageIndex, double scaleFactor);
     RenderedPageResult RenderThumbnail(int pageIndex, double targetWidthPx = 140);
     IReadOnlyList<PageCharInfo> GetPageChars(int pageIndex);
+    IReadOnlyList<PdfBookmarkItem> GetBookmarks();
 }
